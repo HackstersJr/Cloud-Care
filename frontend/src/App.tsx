@@ -12,6 +12,8 @@ import ScanShare from './components/ScanShare';
 import Wearables from './components/Wearables';
 import Settings from './components/Settings';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { MedicalRecordsProvider } from './contexts/MedicalRecordsContext';
+import ErrorBoundary from './components/ErrorBoundary';
 
 export type UserType = 'abha' | 'doctor' | null;
 
@@ -51,16 +53,18 @@ function AppRoutes() {
   // If user is authenticated (ABHA user), show the PWA routes
   if (isAuthenticated) {
     return (
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/facilities" element={<LinkedFacilities />} />
-        <Route path="/consents" element={<Consents />} />
-        <Route path="/records" element={<MyRecords />} />
-        <Route path="/scan" element={<ScanShare />} />
-        <Route path="/wearables" element={<Wearables />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <MedicalRecordsProvider>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/facilities" element={<LinkedFacilities />} />
+          <Route path="/consents" element={<Consents />} />
+          <Route path="/records" element={<MyRecords />} />
+          <Route path="/scan" element={<ScanShare />} />
+          <Route path="/wearables" element={<Wearables />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </MedicalRecordsProvider>
     );
   }
 
@@ -91,13 +95,15 @@ function AppRoutes() {
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <div className="min-h-screen bg-gray-50">
-          <AppRoutes />
-        </div>
-      </Router>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <Router>
+          <div className="min-h-screen bg-gray-50">
+            <AppRoutes />
+          </div>
+        </Router>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

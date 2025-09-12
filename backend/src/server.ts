@@ -17,7 +17,7 @@ import { validateJWT } from './middleware/auth';
 // Import database service
 import { connectDatabase, disconnectDatabase, database } from './services/database';
 
-// Import routes
+// Import routes (v3 - added comprehensive healthcare features)
 import healthRoutes from './routes/health';
 import authRoutes from './routes/auth';
 import patientRoutes from './routes/patients';
@@ -25,6 +25,10 @@ import doctorRoutes from './routes/doctors';
 import medicalRecordRoutes from './routes/medicalRecords';
 import abhaRoutes from './routes/abha';
 import qrRoutes from './routes/qr';
+import dashboardRoutes from './routes/dashboard';
+import medicationsRoutes from './routes/medications';
+import appointmentsRoutes from './routes/appointments';
+import vitalsRoutes from './routes/vitals';
 
 // Load environment variables
 dotenv.config();
@@ -107,16 +111,23 @@ class CloudCareServer {
     // Health check routes (no authentication required)
     this.app.use('/health', healthRoutes);
     this.app.use('/api/health', healthRoutes);
+    this.app.use(`${API_BASE}/health`, healthRoutes);
 
     // Authentication routes
     this.app.use(`${API_BASE}/auth`, authRoutes);
 
     // Protected routes (require JWT authentication)
+    this.app.use(`${API_BASE}/dashboard`, validateJWT, dashboardRoutes);
     this.app.use(`${API_BASE}/patients`, validateJWT, patientRoutes);
     this.app.use(`${API_BASE}/doctors`, validateJWT, doctorRoutes);
     this.app.use(`${API_BASE}/medical-records`, validateJWT, medicalRecordRoutes);
     this.app.use(`${API_BASE}/abha`, validateJWT, abhaRoutes);
     this.app.use(`${API_BASE}/qr`, validateJWT, qrRoutes);
+    
+    // New comprehensive healthcare routes
+    this.app.use(`${API_BASE}/medications`, validateJWT, medicationsRoutes);
+    this.app.use(`${API_BASE}/appointments`, validateJWT, appointmentsRoutes);
+    this.app.use(`${API_BASE}/vitals`, validateJWT, vitalsRoutes);
 
     // 404 handler
     this.app.use('*', (req, res) => {

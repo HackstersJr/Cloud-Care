@@ -39,8 +39,10 @@ RUN npm ci --only=production && npm cache clean --force
 # Copy built application from builder stage
 COPY --from=builder /app/dist ./dist
 
-# Copy any additional files needed for production
-COPY --chown=cloudcare:nodejs . .
+# Copy additional necessary files for production
+COPY --chown=cloudcare:nodejs database ./database
+COPY --chown=cloudcare:nodejs logs ./logs
+COPY --chown=cloudcare:nodejs uploads ./uploads
 
 # Switch to non-root user
 USER cloudcare

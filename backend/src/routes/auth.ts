@@ -1,7 +1,8 @@
 import { Router, Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
 import { authService } from '../services/auth';
 import { validateJWT, optionalJWT } from '../middleware/auth';
-import { loggers } from '../utils/logger';
+import { loggers, logger } from '../utils/logger';
 
 const router = Router();
 
@@ -360,6 +361,357 @@ router.get('/status', optionalJWT, (req: Request, res: Response) => {
     },
     timestamp: new Date().toISOString()
   });
+});
+
+// Send OTP endpoint for ABHA authentication
+router.post('/send-otp', async (req: Request, res: Response) => {
+  try {
+    const { method, value } = req.body;
+
+    if (!method || !value) {
+      return res.status(400).json({
+        error: {
+          status: 'error',
+          statusCode: 400,
+          code: 'MISSING_PARAMETERS',
+          message: 'Method and value are required',
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+
+    // Validate method
+    if (!['mobile', 'email', 'abha-address', 'abha-number'].includes(method)) {
+      return res.status(400).json({
+        error: {
+          status: 'error',
+          statusCode: 400,
+          code: 'INVALID_METHOD',
+          message: 'Method must be one of: mobile, email, abha-address, abha-number',
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+
+    // For development/testing, return success with mock data
+    logger.info(`OTP send request - Method: ${method}, Value: ${value}`);
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'OTP sent successfully',
+      data: {
+        txnId: 'mock-txn-id-' + Date.now(),
+        message: `OTP sent to ${value}`,
+        expiresIn: 300 // 5 minutes
+      },
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error: any) {
+    return res.status(500).json({
+      error: {
+        status: 'error',
+        statusCode: 500,
+        code: 'OTP_SEND_FAILED',
+        message: 'Failed to send OTP',
+        timestamp: new Date().toISOString()
+      }
+    });
+  }
+});
+
+// Verify OTP endpoint for ABHA authentication
+router.post('/verify-otp', async (req: Request, res: Response) => {
+  try {
+    const { method, value, otp, txnId } = req.body;
+
+    if (!method || !value || !otp) {
+      return res.status(400).json({
+        error: {
+          status: 'error',
+          statusCode: 400,
+          code: 'MISSING_PARAMETERS',
+          message: 'Method, value, and OTP are required',
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+
+    // For development/testing, accept OTP 123456
+    if (otp === '123456') {
+      logger.info(`OTP verification successful - Method: ${method}, Value: ${value}`);
+
+      return res.status(200).json({
+        status: 'success',
+        message: 'OTP verified successfully',
+        data: {
+          verified: true,
+          authToken: 'mock-auth-token-' + Date.now(),
+          userInfo: {
+            healthId: value.includes('@') ? value : `healthid-${Date.now()}`,
+            method: method,
+            verified: true
+          }
+        },
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      return res.status(400).json({
+        error: {
+          status: 'error',
+          statusCode: 400,
+          code: 'INVALID_OTP',
+          message: 'Invalid OTP provided',
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+
+  } catch (error: any) {
+    return res.status(500).json({
+      error: {
+        status: 'error',
+        statusCode: 500,
+        code: 'OTP_VERIFICATION_FAILED',
+        message: 'Failed to verify OTP',
+        timestamp: new Date().toISOString()
+      }
+    });
+  }
+});
+
+// ABHA login endpoint (combines OTP verification and user authentication)
+router.post('/abha-login', async (req: Request, res: Response) => {
+  try {
+    const { method, value, otp } = req.body;
+
+    if (!method || !value) {
+      return res.status(400).json({
+        error: {
+          status: 'error',
+          statusCode: 400,
+          code: 'MISSING_PARAMETERS',
+          message: 'Method and value are required',
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+
+    // Validate method
+    if (!['mobile', 'email', 'abha-address', 'abha-number'].includes(method)) {
+      return res.status(400).json({
+        error: {
+          status: 'error',
+          statusCode: 400,
+          code: 'INVALID_METHOD',
+          message: 'Method must be one of: mobile, email, abha-address, abha-number',
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+
+    // If OTP is provided, verify it; otherwise, this is just registration/profile lookup
+    if (otp) {
+      if (otp !== '123456') {
+        return res.status(400).json({
+          error: {
+            status: 'error',
+            statusCode: 400,
+            code: 'INVALID_OTP',
+            message: 'Invalid OTP provided',
+            timestamp: new Date().toISOString()
+          }
+        });
+      }
+    }
+
+    // For development/testing, create a mock user profile
+    const mockUser = {
+      userId: 'user-' + Date.now(),
+      email: method === 'email' ? value : `${value.replace(/[^a-zA-Z0-9]/g, '')}@abha.gov.in`,
+      firstName: 'ABHA',
+      lastName: 'User',
+      role: 'patient',
+      phone: method === 'mobile' ? value : '+91' + Math.floor(Math.random() * 10000000000),
+      abhaId: value.includes('@') ? value : `abha-${Date.now()}`,
+      healthId: value.includes('@') ? value : `healthid-${Date.now()}`,
+      isVerified: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    // Generate real JWT tokens for development
+    const tokenPayload = {
+      id: mockUser.userId,
+      email: mockUser.email,
+      role: mockUser.role,
+      abhaId: mockUser.abhaId,
+      permissions: ['patient:read', 'patient:write'],
+      isVerified: true
+    };
+
+    const accessToken = jwt.sign(
+      tokenPayload,
+      process.env.JWT_SECRET || 'your-secret-key',
+      { expiresIn: '24h' }
+    );
+
+    const refreshToken = jwt.sign(
+      { id: mockUser.userId, type: 'refresh' },
+      process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-key',
+      { expiresIn: '7d' }
+    );
+
+    const tokens = {
+      accessToken,
+      refreshToken,
+      expiresIn: 24 * 60 * 60 // 24 hours in seconds
+    };
+
+    logger.info(`ABHA login successful - Method: ${method}, Value: ${value}, User: ${mockUser.userId}`);
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'ABHA login successful',
+      data: {
+        user: mockUser,
+        tokens: tokens
+      },
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error: any) {
+    return res.status(500).json({
+      error: {
+        status: 'error',
+        statusCode: 500,
+        code: 'ABHA_LOGIN_FAILED',
+        message: 'ABHA login failed',
+        timestamp: new Date().toISOString()
+      }
+    });
+  }
+});
+
+// Doctor login endpoint with facility credentials
+router.post('/doctor-login', async (req: Request, res: Response) => {
+  try {
+    const { facilityId, password, captcha } = req.body;
+
+    if (!facilityId || !password || !captcha) {
+      return res.status(400).json({
+        error: {
+          status: 'error',
+          statusCode: 400,
+          code: 'MISSING_CREDENTIALS',
+          message: 'Facility ID, password, and captcha are required',
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+
+    // Simple captcha validation (for development)
+    // In production, this should be more sophisticated
+    if (captcha !== 'doctor123') {
+      return res.status(400).json({
+        error: {
+          status: 'error',
+          statusCode: 400,
+          code: 'INVALID_CAPTCHA',
+          message: 'Invalid captcha provided',
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+
+    // For development/testing, create mock doctor credentials
+    const mockDoctorCredentials = {
+      'HOSP001': { password: 'doctor123', name: 'Dr. Sarah Wilson', email: 'dr.sarah@cloudcare.com' },
+      'HOSP002': { password: 'doctor123', name: 'Dr. John Smith', email: 'dr.john@cloudcare.com' },
+      'CLINIC001': { password: 'doctor123', name: 'Dr. Emergency', email: 'dr.emergency@cloudcare.com' },
+      'TEST001': { password: 'doctor123', name: 'Dr. Test Doctor', email: 'dr.test@cloudcare.com' }
+    };
+
+    const facilityData = mockDoctorCredentials[facilityId as keyof typeof mockDoctorCredentials];
+
+    if (!facilityData || facilityData.password !== password) {
+      return res.status(401).json({
+        error: {
+          status: 'error',
+          statusCode: 401,
+          code: 'INVALID_CREDENTIALS',
+          message: 'Invalid facility ID or password',
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+
+    // Create mock doctor user
+    const mockDoctor = {
+      userId: 'doctor-' + Date.now(),
+      email: facilityData.email,
+      firstName: facilityData.name.split(' ')[1] || 'Doctor',
+      lastName: facilityData.name.split(' ').slice(2).join(' ') || 'User',
+      role: 'doctor',
+      facilityId: facilityId,
+      facilityName: `Healthcare Facility ${facilityId}`,
+      specialization: 'General Medicine',
+      isVerified: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    // Generate real JWT tokens for doctor
+    const tokenPayload = {
+      id: mockDoctor.userId,
+      email: mockDoctor.email,
+      role: mockDoctor.role,
+      facilityId: facilityId,
+      permissions: ['doctor:read', 'doctor:write', 'patient:read', 'patient:write'],
+      isVerified: true
+    };
+
+    const accessToken = jwt.sign(
+      tokenPayload,
+      process.env.JWT_SECRET || 'your-secret-key',
+      { expiresIn: '24h' }
+    );
+
+    const refreshToken = jwt.sign(
+      { id: mockDoctor.userId, type: 'refresh' },
+      process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-key',
+      { expiresIn: '7d' }
+    );
+
+    const tokens = {
+      accessToken,
+      refreshToken,
+      expiresIn: 24 * 60 * 60 // 24 hours in seconds
+    };
+
+    logger.info(`Doctor login successful - Facility: ${facilityId}, Doctor: ${mockDoctor.userId}`);
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Doctor login successful',
+      data: {
+        user: mockDoctor,
+        tokens: tokens
+      },
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error: any) {
+    return res.status(500).json({
+      error: {
+        status: 'error',
+        statusCode: 500,
+        code: 'DOCTOR_LOGIN_FAILED',
+        message: 'Doctor login failed',
+        timestamp: new Date().toISOString()
+      }
+    });
+  }
 });
 
 export default router;

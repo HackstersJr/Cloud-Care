@@ -14,7 +14,7 @@ const DoctorLoginPage = ({ onLogin, onBack, onAbhaLogin }: DoctorLoginPageProps)
     captcha: ''
   });
   const [showPassword, setShowPassword] = useState(false);
-  const [captchaText, setCaptchaText] = useState('Ax5=?');
+  const [captchaText, setCaptchaText] = useState('doctor123');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,12 +25,8 @@ const DoctorLoginPage = ({ onLogin, onBack, onAbhaLogin }: DoctorLoginPageProps)
   };
 
   const refreshCaptcha = () => {
-    // Generate a simple math captcha
-    const operations = ['+', '-', '×'];
-    const operation = operations[Math.floor(Math.random() * operations.length)];
-    const num1 = Math.floor(Math.random() * 10) + 1;
-    const num2 = Math.floor(Math.random() * 10) + 1;
-    setCaptchaText(`${num1}${operation}${num2}=?`);
+    // For development, always use 'doctor123' as captcha
+    setCaptchaText('doctor123');
   };
 
   const handleInputChange = (field: string, value: string) => {
@@ -115,6 +111,16 @@ const DoctorLoginPage = ({ onLogin, onBack, onAbhaLogin }: DoctorLoginPageProps)
           <div className="text-center mb-8">
             <h1 className="text-2xl font-bold text-gray-900 mb-2">Doctor Login</h1>
             <p className="text-gray-600">Access your doctor dashboard</p>
+            
+            {/* Development Test Credentials */}
+            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-left">
+              <h3 className="text-sm font-semibold text-blue-800 mb-2">Test Credentials:</h3>
+              <div className="text-xs text-blue-700 space-y-1">
+                <p><strong>Facility ID:</strong> HOSP001, HOSP002, CLINIC001, or TEST001</p>
+                <p><strong>Password:</strong> doctor123</p>
+                <p><strong>Captcha:</strong> doctor123</p>
+              </div>
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">

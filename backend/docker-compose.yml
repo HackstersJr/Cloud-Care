@@ -47,6 +47,8 @@ services:
       dockerfile: Dockerfile
       target: production
     container_name: cloudcare-backend
+    env_file:
+      - .env
     environment:
       NODE_ENV: development
       PORT: 3000
