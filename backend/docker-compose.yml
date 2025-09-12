@@ -1,0 +1,112 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: cloudcare-postgres
+    environment:
+      POSTGRES_DB: cloudcare_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: cloudcare_dev_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
+    networks:
+      - cloudcare-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cloudcare_db"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Redis for caching and sessions
+  redis:
+    image: redis:7-alpine
+    container_name: cloudcare-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - cloudcare-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass cloudcare_redis_password
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # CloudCare Backend Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: cloudcare-backend
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      HOST: 0.0.0.0
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: cloudcare_db
+      DB_USER: postgres
+      DB_PASSWORD: cloudcare_dev_password
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: cloudcare_redis_password
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads
+    networks:
+      - cloudcare-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); }).on('error', () => { process.exit(1); });"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Database migrations (run once)
+  migrations:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    container_name: cloudcare-migrations
+    environment:
+      NODE_ENV: development
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: cloudcare_db
+      DB_USER: postgres
+      DB_PASSWORD: cloudcare_dev_password
+    networks:
+      - cloudcare-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: npm run migrate
+    volumes:
+      - ./database:/app/database
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  cloudcare-network:
+    driver: bridge

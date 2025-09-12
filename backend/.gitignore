@@ -1,0 +1,99 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Production build
+dist/
+build/
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+logs/
+*.log
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Database
+*.sqlite
+*.sqlite3
+
+# Docker
+.docker/
+
+# Temporary files
+temp/
+tmp/
+
+# OS generated files
+Thumbs.db
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# Medical files (uploaded content)
+uploads/
+medical-files/
+
+# Backup files
+*.backup
+*.bak
+
+# Security
+*.pem
+*.key
+*.crt
+*.p12
+
+# Testing
+.nyc_output
+
+# Optional npm cache directory
+.npm
+
+# Optional REPL history
+.node_repl_history
+
+# Yarn Integrity file
+.yarn-integrity
+
+# TypeScript
+*.tsbuildinfo
+
+# Jest
+jest_0/
+
+# Blockchain
+.secrets/
+wallet/
+
+# Google Cloud
+.gcloudignore
+service-account*.json
+
+# Local development
+.local/
+dev-data/
