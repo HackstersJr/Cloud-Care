@@ -1,9 +1,13 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import Layout from './layout/Layout';
-import { QrCode, Upload, Share2, History, Camera } from 'lucide-react';
+import { QrCode, Upload, Share2, History } from 'lucide-react';
+import QRScannerSimulator from './QRScannerSimulator';
+import PatientDataQRGenerator from './PatientDataQRGenerator';
+import QRCodeDemo from './QRCodeDemo';
 
 const ScanShare = () => {
   const [showScanner, setShowScanner] = useState(false);
+  const [showQRGenerator, setShowQRGenerator] = useState(false);
   
   const recentShares = [
     { facility: 'Archana Eye Clinic', date: '2024-01-15', token: 'TKN123456' },
@@ -44,9 +48,12 @@ const ScanShare = () => {
               <Share2 className="w-5 h-5 text-blue-600 mr-3" />
               <span className="text-sm font-medium">Share with healthcare provider</span>
             </button>
-            <button className="w-full flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50">
+            <button 
+              onClick={() => setShowQRGenerator(true)}
+              className="w-full flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50"
+            >
               <QrCode className="w-5 h-5 text-green-600 mr-3" />
-              <span className="text-sm font-medium">Generate my QR code</span>
+              <span className="text-sm font-medium">Generate my complete health QR code</span>
             </button>
           </div>
         </div>
@@ -75,6 +82,9 @@ const ScanShare = () => {
           </div>
         </div>
 
+        {/* Demo Section for Testing */}
+        <QRCodeDemo />
+
         {/* Instructions */}
         <div className="bg-blue-50 rounded-lg p-6 border border-blue-200">
           <h4 className="font-medium text-blue-900 mb-2">How to use Scan & Share</h4>
@@ -88,40 +98,16 @@ const ScanShare = () => {
       </div>
 
       {/* QR Scanner Modal */}
-      {showScanner && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">QR Code Scanner</h3>
-              <button 
-                onClick={() => setShowScanner(false)}
-                className="text-gray-400 hover:text-gray-600 text-xl"
-              >
-                ×
-              </button>
-            </div>
-            
-            <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center mb-4">
-              <div className="text-center">
-                <Camera className="w-16 h-16 text-gray-400 mx-auto mb-2" />
-                <p className="text-sm text-gray-600">Position QR code in frame</p>
-              </div>
-            </div>
-            
-            <div className="flex space-x-3">
-              <button 
-                onClick={() => setShowScanner(false)}
-                className="flex-1 py-2 px-4 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
-                Scan
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <QRScannerSimulator 
+        isOpen={showScanner} 
+        onClose={() => setShowScanner(false)} 
+      />
+
+      {/* Patient Data QR Generator Modal */}
+      <PatientDataQRGenerator
+        isOpen={showQRGenerator}
+        onClose={() => setShowQRGenerator(false)}
+      />
     </Layout>
   );
 };

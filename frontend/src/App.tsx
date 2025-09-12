@@ -11,6 +11,7 @@ import MyRecords from './components/MyRecords';
 import ScanShare from './components/ScanShare';
 import Wearables from './components/Wearables';
 import Settings from './components/Settings';
+import PatientDataLanding from './components/PatientDataLanding';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 export type UserType = 'abha' | 'doctor' | null;
@@ -59,6 +60,7 @@ function AppRoutes() {
         <Route path="/scan" element={<ScanShare />} />
         <Route path="/wearables" element={<Wearables />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/patient-data" element={<PatientDataLanding />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     );
@@ -84,6 +86,7 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<LandingPage onLogin={handleLogin} />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/patient-data" element={<PatientDataLanding />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

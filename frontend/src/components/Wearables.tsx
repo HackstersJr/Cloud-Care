@@ -1,31 +1,78 @@
-import React, { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Layout from './layout/Layout';
-import { Smartphone, Activity, Heart, Footprints, Plus, Wifi, Battery, Check } from 'lucide-react';
+import { 
+  Activity, Heart, Footprints, Plus, Wifi, Battery, 
+  TrendingUp, Moon, Zap, BarChart3, Eye
+} from 'lucide-react';
+import { 
+  LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
+} from 'recharts';
+import { healthApi } from '../services/healthApi';
+import { processHealthData, ProcessedHealthData, getWeekAgoDateString, formatHealthValue } from '../utils/healthDataProcessor';
 
 const Wearables = () => {
   const [showConnectModal, setShowConnectModal] = useState(false);
   const [selectedDevice, setSelectedDevice] = useState<string | null>(null);
-  
+  const [viewMode, setViewMode] = useState<'today' | 'weekly'>('today');
+  const [healthData, setHealthData] = useState<ProcessedHealthData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [dataTypes, setDataTypes] = useState<{[key: string]: number}>({});
+
+  // Load health data
+  useEffect(() => {
+    const loadHealthData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Check available data types first
+        const availableData = await healthApi.getAllAvailableData();
+        setDataTypes(availableData);
+
+        // Fetch data for the last week
+        const startDate = getWeekAgoDateString();
+
+        const [steps, heartRate, calories, sleep, distance] = await Promise.all([
+          healthApi.getStepsData(startDate),
+          healthApi.getHeartRateData(startDate),
+          healthApi.getCaloriesData(startDate),
+          healthApi.getSleepData(startDate),
+          healthApi.getDistanceData(startDate)
+        ]);
+
+        const processed = processHealthData({
+          steps,
+          heartRate,
+          calories,
+          sleep,
+          distance
+        });
+
+        setHealthData(processed);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load health data');
+        console.error('Failed to load health data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadHealthData();
+  }, []);
+
   const connectedDevices = [
     {
       id: 1,
-      name: 'Fitbit Charge 5',
+      name: 'Xiaomi Mi Band',
       type: 'Fitness Tracker',
       battery: 85,
       lastSync: '2 minutes ago',
       status: 'Connected',
       icon: Activity,
-      color: 'bg-green-100 text-green-600'
-    },
-    {
-      id: 2,
-      name: 'Apple Watch Series 9',
-      type: 'Smartwatch',
-      battery: 72,
-      lastSync: '5 minutes ago',
-      status: 'Connected',
-      icon: Heart,
-      color: 'bg-red-100 text-red-600'
+      color: 'bg-orange-100 text-orange-600',
+      dataCount: dataTypes.activeCaloriesBurned || 0
     }
   ];
 
@@ -38,39 +85,243 @@ const Wearables = () => {
     { name: 'Xiaomi Mi Fit', icon: Activity, color: 'bg-yellow-100 text-yellow-600' }
   ];
 
-  const healthMetrics = [
-    { label: 'Steps Today', value: '8,245', change: '+12%', color: 'text-green-600' },
-    { label: 'Heart Rate', value: '72 bpm', change: 'Normal', color: 'text-blue-600' },
-    { label: 'Sleep', value: '7h 32m', change: '+8%', color: 'text-purple-600' },
-    { label: 'Calories', value: '2,156', change: '+5%', color: 'text-orange-600' }
-  ];
-
   const handleConnectDevice = (deviceName: string) => {
     setSelectedDevice(deviceName);
-    // Simulate connection process
     setTimeout(() => {
       setSelectedDevice(null);
       setShowConnectModal(false);
-      // In a real app, you would add the device to connectedDevices
     }, 2000);
   };
+
+  if (loading) {
+    return (
+      <Layout title="Wearables & Devices">
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <span className="ml-3 text-gray-600">Loading health data...</span>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (error) {
+    return (
+      <Layout title="Wearables & Devices">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                <span className="text-red-600 text-sm font-medium">!</span>
+              </div>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">Error loading health data</h3>
+              <p className="text-sm text-red-700 mt-1">{error}</p>
+              <button 
+                onClick={() => window.location.reload()}
+                className="text-sm text-red-600 underline mt-2"
+              >
+                Try again
+              </button>
+            </div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  const todayMetrics = healthData ? [
+    { 
+      label: 'Steps Today', 
+      value: formatHealthValue(healthData.steps.today, 'steps'), 
+      change: '+12%', 
+      color: 'text-green-600',
+      icon: Footprints,
+      bgColor: 'bg-green-100'
+    },
+    { 
+      label: 'Heart Rate', 
+      value: formatHealthValue(healthData.heartRate.current, 'heartRate'), 
+      change: 'Normal', 
+      color: 'text-red-600',
+      icon: Heart,
+      bgColor: 'bg-red-100'
+    },
+    { 
+      label: 'Sleep', 
+      value: formatHealthValue(healthData.sleep.lastNight, 'sleep'), 
+      change: '+8%', 
+      color: 'text-purple-600',
+      icon: Moon,
+      bgColor: 'bg-purple-100'
+    },
+    { 
+      label: 'Calories', 
+      value: formatHealthValue(healthData.calories.today, 'calories'), 
+      change: `${Math.round((healthData.calories.today / healthData.calories.target) * 100)}%`, 
+      color: 'text-orange-600',
+      icon: Zap,
+      bgColor: 'bg-orange-100'
+    }
+  ] : [];
 
   return (
     <Layout title="Wearables & Devices">
       <div className="space-y-6">
-        {/* Health Metrics Overview */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl p-6 text-white">
-          <h2 className="text-xl font-bold mb-4">Today's Health Summary</h2>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {healthMetrics.map((metric, index) => (
-              <div key={index} className="bg-white/20 rounded-lg p-3">
-                <p className="text-sm text-blue-100">{metric.label}</p>
-                <p className="text-xl font-bold">{metric.value}</p>
-                <p className="text-xs text-blue-200">{metric.change}</p>
-              </div>
-            ))}
+        {/* View Toggle */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => setViewMode('today')}
+              className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                viewMode === 'today'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <Eye className="w-4 h-4 mr-2" />
+              Today's View
+            </button>
+            <button
+              onClick={() => setViewMode('weekly')}
+              className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                viewMode === 'weekly'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <BarChart3 className="w-4 h-4 mr-2" />
+              Weekly Trends
+            </button>
           </div>
         </div>
+
+        {viewMode === 'today' ? (
+          <>
+            {/* Today's Health Summary */}
+            <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl p-6 text-white">
+              <h2 className="text-xl font-bold mb-4">Today's Health Summary</h2>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {todayMetrics.map((metric, index) => (
+                  <div key={index} className="bg-white/20 rounded-lg p-3">
+                    <div className="flex items-center mb-2">
+                      <metric.icon className="w-4 h-4 mr-2" />
+                      <p className="text-sm text-blue-100">{metric.label}</p>
+                    </div>
+                    <p className="text-xl font-bold">{metric.value}</p>
+                    <p className="text-xs text-blue-200">{metric.change}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Today's Detailed Charts */}
+            {healthData && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Heart Rate Trend */}
+                <div className="bg-white rounded-lg shadow-sm border p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Heart Rate Today</h3>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <LineChart data={healthData.heartRate.trend}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="time" />
+                      <YAxis />
+                      <Tooltip />
+                      <Line type="monotone" dataKey="value" stroke="#ef4444" strokeWidth={2} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Calories Goal */}
+                <div className="bg-white rounded-lg shadow-sm border p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Calories Goal</h3>
+                  <div className="flex items-center justify-center h-48">
+                    <ResponsiveContainer width="100%" height={200}>
+                      <PieChart>
+                        <Pie
+                          data={[
+                            { name: 'Burned', value: healthData.calories.today },
+                            { name: 'Remaining', value: Math.max(0, healthData.calories.target - healthData.calories.today) }
+                          ]}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={80}
+                          paddingAngle={5}
+                          dataKey="value"
+                        >
+                          <Cell fill="#f97316" />
+                          <Cell fill="#e5e7eb" />
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-gray-900">{healthData.calories.today}</p>
+                    <p className="text-sm text-gray-600">of {healthData.calories.target} calories</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            {/* Weekly Trends */}
+            <div className="bg-white rounded-lg shadow-sm border">
+              <div className="p-6 border-b">
+                <h3 className="text-lg font-semibold text-gray-900">Weekly Health Trends</h3>
+              </div>
+              <div className="p-6">
+                {healthData && (
+                  <div className="space-y-8">
+                    {/* Steps Weekly */}
+                    <div>
+                      <h4 className="text-md font-medium text-gray-900 mb-3">Daily Steps</h4>
+                      <ResponsiveContainer width="100%" height={200}>
+                        <BarChart data={healthData.steps.weekly}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="date" />
+                          <YAxis />
+                          <Tooltip />
+                          <Bar dataKey="value" fill="#3b82f6" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* Calories Weekly */}
+                    <div>
+                      <h4 className="text-md font-medium text-gray-900 mb-3">Daily Calories Burned</h4>
+                      <ResponsiveContainer width="100%" height={200}>
+                        <AreaChart data={healthData.calories.weekly}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="date" />
+                          <YAxis />
+                          <Tooltip />
+                          <Area type="monotone" dataKey="value" stroke="#f97316" fill="#f9731660" />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* Sleep Weekly */}
+                    <div>
+                      <h4 className="text-md font-medium text-gray-900 mb-3">Daily Sleep Hours</h4>
+                      <ResponsiveContainer width="100%" height={200}>
+                        <LineChart data={healthData.sleep.weekly}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="date" />
+                          <YAxis />
+                          <Tooltip />
+                          <Line type="monotone" dataKey="value" stroke="#8b5cf6" strokeWidth={2} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Connected Devices */}
         <div className="bg-white rounded-lg shadow-sm border">
@@ -98,6 +349,7 @@ const Wearables = () => {
                     <div>
                       <h4 className="font-medium text-gray-900">{device.name}</h4>
                       <p className="text-sm text-gray-600">{device.type}</p>
+                      <p className="text-xs text-green-600">{device.dataCount} data points synced</p>
                     </div>
                   </div>
                   
@@ -121,35 +373,47 @@ const Wearables = () => {
           </div>
         </div>
 
-        {/* Data Sync Settings */}
-        <div className="bg-white rounded-lg shadow-sm border">
-          <div className="p-6 border-b">
-            <h3 className="text-lg font-semibold text-gray-900">Sync Settings</h3>
-          </div>
-          <div className="p-6">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-gray-900">Auto-sync health data</p>
-                  <p className="text-sm text-gray-600">Automatically sync data every hour</p>
+        {/* Data Insights */}
+        {healthData && (
+          <div className="bg-white rounded-lg shadow-sm border">
+            <div className="p-6 border-b">
+              <h3 className="text-lg font-semibold text-gray-900">Health Insights</h3>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="bg-blue-50 rounded-lg p-4">
+                  <div className="flex items-center">
+                    <TrendingUp className="w-5 h-5 text-blue-600 mr-2" />
+                    <span className="text-sm font-medium text-blue-900">Steps Trend</span>
+                  </div>
+                  <p className="text-sm text-blue-700 mt-1">
+                    Average {Math.round(healthData.steps.weekly.reduce((sum, day) => sum + day.value, 0) / 7)} steps/day this week
+                  </p>
                 </div>
-                <button className="bg-blue-600 rounded-full w-12 h-6 flex items-center justify-end px-1">
-                  <div className="w-4 h-4 bg-white rounded-full"></div>
-                </button>
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-gray-900">Share with healthcare providers</p>
-                  <p className="text-sm text-gray-600">Allow linked facilities to access wearable data</p>
+                
+                <div className="bg-red-50 rounded-lg p-4">
+                  <div className="flex items-center">
+                    <Heart className="w-5 h-5 text-red-600 mr-2" />
+                    <span className="text-sm font-medium text-red-900">Heart Health</span>
+                  </div>
+                  <p className="text-sm text-red-700 mt-1">
+                    Average resting HR: {healthData.heartRate.average} bpm
+                  </p>
                 </div>
-                <button className="bg-gray-300 rounded-full w-12 h-6 flex items-center justify-start px-1">
-                  <div className="w-4 h-4 bg-white rounded-full"></div>
-                </button>
+                
+                <div className="bg-purple-50 rounded-lg p-4">
+                  <div className="flex items-center">
+                    <Moon className="w-5 h-5 text-purple-600 mr-2" />
+                    <span className="text-sm font-medium text-purple-900">Sleep Quality</span>
+                  </div>
+                  <p className="text-sm text-purple-700 mt-1">
+                    Average {healthData.sleep.average}h sleep per night
+                  </p>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Privacy Notice */}
         <div className="bg-yellow-50 rounded-lg p-6 border border-yellow-200">
