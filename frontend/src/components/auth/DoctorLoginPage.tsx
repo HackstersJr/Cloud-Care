@@ -52,23 +52,20 @@ const DoctorLoginPage = ({ onLogin, onBack, onAbhaLogin }: DoctorLoginPageProps)
                 <span className="text-sm font-medium">Back</span>
               </button>
               <div className="flex items-center space-x-4">
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center">
                   <img
-                    src="https://images.pexels.com/photos/40568/medical-appointment-doctor-healthcare-40568.jpeg?auto=compress&cs=tinysrgb&w=32&h=32&fit=crop"
+                    src="/symbol1.svg"
                     alt="National Health Authority"
-                    className="w-8 h-8 rounded"
+                    className="h-10 w-auto"
                   />
-                  <div className="text-sm">
-                    <div className="font-semibold text-gray-900">National Health</div>
-                    <div className="text-gray-600">Authority</div>
-                  </div>
                 </div>
-                <div className="h-8 w-px bg-gray-300"></div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
-                    <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-                  </div>
-                  <span className="text-sm font-medium text-gray-900">Digital India</span>
+                <div className="h-10 w-px bg-gray-300 mx-3"></div>
+                <div className="flex items-center">
+                  <img
+                    src="/symbol2.svg"
+                    alt="ABDM Digital Mission"
+                    className="h-9 w-auto"
+                  />
                 </div>
               </div>
             </div>

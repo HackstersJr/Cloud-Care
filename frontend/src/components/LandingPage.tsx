@@ -1,4 +1,3 @@
-import React from 'react';
 import { Heart, Shield, Users, Activity, User, Stethoscope } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { UserType } from '../App';
@@ -26,22 +25,21 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-2 sm:space-x-4">
-              <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center">
                 <img
-                  src="https://images.pexels.com/photos/40568/medical-appointment-doctor-healthcare-40568.jpeg?auto=compress&cs=tinysrgb&w=32&h=32&fit=crop"
+                  src="/symbol1.svg"
                   alt="National Health Authority"
-                  className="w-6 h-6 sm:w-8 sm:h-8 rounded"
+                  className="h-10 w-auto"
                 />
-                <div className="text-xs sm:text-sm">
-                  <div className="font-semibold text-gray-900">National Health</div>
-                  <div className="text-gray-600">Authority</div>
-                </div>
               </div>
-              <div className="hidden sm:block h-8 w-px bg-gray-300"></div>
-              <div className="hidden sm:flex items-center space-x-2">
-                <Heart className="w-4 h-4 sm:w-6 sm:h-6 text-red-500" />
-                <span className="text-xs sm:text-sm font-medium text-gray-900">Digital India</span>
+              <div className="h-10 w-px bg-gray-300 mx-3"></div>
+              <div className="flex items-center">
+                <img
+                  src="/symbol2.svg"
+                  alt="ABDM Digital Mission"
+                  className="h-9 w-auto"
+                />
               </div>
             </div>
             <div className="flex items-center space-x-2 sm:space-x-4">
@@ -121,7 +119,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
             <div className="bg-gradient-to-br from-blue-100 to-orange-100 rounded-2xl p-4 sm:p-8 relative overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-orange-500/10"></div>
               <img
-                src="https://images.pexels.com/photos/5668772/pexels-photo-5668772.jpeg?auto=compress&cs=tinysrgb&w=500&h=400&fit=crop"
+                src="/healthcare-illustration.svg"
                 alt="Digital Healthcare"
                 className="w-full h-48 sm:h-64 lg:h-80 object-cover rounded-lg shadow-lg"
               />

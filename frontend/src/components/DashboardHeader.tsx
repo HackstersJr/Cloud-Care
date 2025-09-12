@@ -1,5 +1,4 @@
-import React from 'react';
-import { Heart, Bell, Settings, LogOut, User } from 'lucide-react';
+import { Bell, Settings, LogOut, User } from 'lucide-react';
 
 interface DashboardHeaderProps {
   onLogout: () => void;
@@ -13,7 +12,7 @@ export default function DashboardHeader({ onLogout }: DashboardHeaderProps) {
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
               <img
-                src="https://images.pexels.com/photos/40568/medical-appointment-doctor-healthcare-40568.jpeg?auto=compress&cs=tinysrgb&w=32&h=32&fit=crop"
+                src="/symbol1.svg"
                 alt="National Health Authority"
                 className="w-8 h-8 rounded"
               />
@@ -24,8 +23,12 @@ export default function DashboardHeader({ onLogout }: DashboardHeaderProps) {
             </div>
             <div className="h-8 w-px bg-gray-300"></div>
             <div className="flex items-center space-x-2">
-              <Heart className="w-6 h-6 text-red-500" />
-              <span className="text-sm font-medium text-gray-900">Doctor Dashboard</span>
+              <img
+                src="/symbol2.svg"
+                alt="ABDM Digital Mission"
+                className="w-6 h-6"
+              />
+              <span className="text-sm font-medium text-gray-900">Digital India</span>
             </div>
           </div>
           

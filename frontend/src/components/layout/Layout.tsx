@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Menu, Bell, User, QrCode } from 'lucide-react';
 import BottomNavigation from './BottomNavigation';
 import SideMenu from './SideMenu';
+import PatientDataQRGenerator from '../PatientDataQRGenerator';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -10,6 +11,11 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children, title }) => {
   const [showMenu, setShowMenu] = useState(false);
+  const [showQRGenerator, setShowQRGenerator] = useState(false);
+
+  const handleQRClick = () => {
+    setShowQRGenerator(true);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -28,7 +34,11 @@ const Layout: React.FC<LayoutProps> = ({ children, title }) => {
             </div>
             
             <div className="flex items-center space-x-2">
-              <button className="p-2 text-gray-600 hover:text-gray-900">
+              <button 
+                onClick={handleQRClick}
+                className="p-2 text-gray-600 hover:text-gray-900"
+                title="Generate my QR code"
+              >
                 <QrCode className="w-5 h-5" />
               </button>
               <button className="p-2 text-gray-600 hover:text-gray-900 relative">
@@ -55,6 +65,12 @@ const Layout: React.FC<LayoutProps> = ({ children, title }) => {
 
       {/* Side Menu */}
       <SideMenu isOpen={showMenu} onClose={() => setShowMenu(false)} />
+
+      {/* Patient QR Generator Modal */}
+      <PatientDataQRGenerator 
+        isOpen={showQRGenerator} 
+        onClose={() => setShowQRGenerator(false)} 
+      />
     </div>
   );
 };

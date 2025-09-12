@@ -7,6 +7,13 @@ export default defineConfig({
   server: {
     host: true, // This exposes the server to the network
     port: 5174,
+    proxy: {
+      '/api/v2': {
+        target: 'http://10.44.0.82:6644', // HCGateway API server
+        changeOrigin: true,
+        secure: false,
+      },
+    },
   },
   optimizeDeps: {
     exclude: ['lucide-react'],
