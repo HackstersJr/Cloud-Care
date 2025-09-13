@@ -54,7 +54,6 @@ const AIInsights: React.FC<AIInsightsProps> = ({ patientId, qrToken, patientData
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
-          // Removed Authorization header since QR routes don't require JWT
         },
         body: JSON.stringify({
           patientId,
@@ -67,15 +66,82 @@ const AIInsights: React.FC<AIInsightsProps> = ({ patientId, qrToken, patientData
       const data = await response.json();
       console.log('🟡 Response data:', data);
 
-      const data = await response.json();
-
       if (data.success && data.data?.insights) {
-        setInsights(data.data.insights);
+        // Handle nested insights structure
+        const insightsData = data.data.insights.insights || data.data.insights;
+        console.log('🟡 Setting insights data:', insightsData);
+        
+        // Transform the insights object into the expected array format
+        const transformedInsights: AIInsight[] = [];
+        
+        if (insightsData.clinicalAssessment) {
+          transformedInsights.push({
+            type: 'clinical_assessment',
+            title: 'Clinical Assessment',
+            content: insightsData.clinicalAssessment,
+            priority: insightsData.urgencyLevel === 'high' ? 'high' : insightsData.urgencyLevel === 'medium' ? 'medium' : 'low',
+            category: 'Assessment'
+          });
+        }
+        
+        if (insightsData.familyRiskFactors && insightsData.familyRiskFactors.length > 0) {
+          transformedInsights.push({
+            type: 'family_history_insights',
+            title: 'Family Risk Factors',
+            content: insightsData.familyRiskFactors.join('. '),
+            priority: 'medium',
+            category: 'Risk Analysis'
+          });
+        }
+        
+        if (insightsData.recommendedTests && insightsData.recommendedTests.length > 0) {
+          transformedInsights.push({
+            type: 'risk_analysis',
+            title: 'Recommended Tests',
+            content: insightsData.recommendedTests.join('\n• '),
+            priority: 'medium',
+            category: 'Diagnostics'
+          });
+        }
+        
+        if (insightsData.treatmentSuggestions && insightsData.treatmentSuggestions.length > 0) {
+          transformedInsights.push({
+            type: 'treatment_suggestions',
+            title: 'Treatment Suggestions',
+            content: insightsData.treatmentSuggestions.join('\n• '),
+            priority: 'high',
+            category: 'Treatment'
+          });
+        }
+        
+        if (insightsData.preventiveCare && insightsData.preventiveCare.length > 0) {
+          transformedInsights.push({
+            type: 'preventive_care',
+            title: 'Preventive Care',
+            content: insightsData.preventiveCare.join('\n• '),
+            priority: 'medium',
+            category: 'Prevention'
+          });
+        }
+        
+        if (insightsData.followUpRecommendations) {
+          transformedInsights.push({
+            type: 'clinical_assessment',
+            title: 'Follow-up Recommendations',
+            content: insightsData.followUpRecommendations,
+            priority: 'high',
+            category: 'Follow-up'
+          });
+        }
+        
+        console.log('🟡 Transformed insights:', transformedInsights);
+        setInsights(transformedInsights);
       } else {
+        console.log('🔴 Failed to get insights:', data.message);
         setError(data.message || 'Failed to load AI insights');
       }
     } catch (err: any) {
-      console.error('Error loading AI insights:', err);
+      console.error('🔴 Error loading AI insights:', err);
       setError('Network error occurred while loading insights');
     } finally {
       setIsLoading(false);
@@ -85,15 +151,14 @@ const AIInsights: React.FC<AIInsightsProps> = ({ patientId, qrToken, patientData
   const loadQuickSuggestions = async () => {
     if (!patientId) return;
 
-    // Get symptoms from patient data or use common symptoms from medical records
-    const symptoms = patientData?.symptoms || ['headache', 'fatigue']; // Default symptoms for demo
+    // Use default symptoms since patientData doesn't contain symptoms property
+    const symptoms = ['headache', 'fatigue']; // Default symptoms for demo
 
     try {
       const response = await fetch('/api/v1/qr/ai/quick-suggestions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
-          // Removed Authorization header since QR routes don't require JWT
         },
         body: JSON.stringify({
           patientId,
@@ -106,7 +171,16 @@ const AIInsights: React.FC<AIInsightsProps> = ({ patientId, qrToken, patientData
       console.log('🟡 Quick suggestions response:', data);
 
       if (data.success && data.data?.suggestions) {
-        setQuickSuggestions(data.data.suggestions);
+        // Transform string array to QuickSuggestion objects
+        const transformedSuggestions: QuickSuggestion[] = data.data.suggestions.map((suggestion: string, index: number) => ({
+          type: 'differential_diagnosis',
+          suggestion: suggestion,
+          reasoning: 'Based on reported symptoms and patient history',
+          urgency: index === 0 ? 'soon' : 'routine' // First suggestion gets higher urgency
+        }));
+        
+        console.log('🟡 Transformed quick suggestions:', transformedSuggestions);
+        setQuickSuggestions(transformedSuggestions);
       }
     } catch (err: any) {
       console.error('Error loading quick suggestions:', err);
