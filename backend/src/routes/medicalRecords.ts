@@ -17,6 +17,13 @@ router.use(validateJWT);
 router.post('/', medicalRecordsController.createMedicalRecord.bind(medicalRecordsController));
 
 /**
+ * @route GET /api/medical-records/my-records
+ * @desc Get all medical records for the current authenticated user
+ * @access Private (Patient own records only)
+ */
+router.get('/my-records', medicalRecordsController.getMyMedicalRecords.bind(medicalRecordsController));
+
+/**
  * @route GET /api/medical-records/:id
  * @desc Get medical record by ID with blockchain verification
  * @access Private (Patient own records, assigned healthcare providers, admins)

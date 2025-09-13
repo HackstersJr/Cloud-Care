@@ -1,35 +1,30 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { apiClient, User } from '../utils/api';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { 
+  apiClient, 
+  User, 
+  StandardLoginData, 
+  DoctorLoginData, 
+  ABHALoginData, 
+  RegisterData
+} from '../utils/api';
 
 interface AuthContextType {
   isAuthenticated: boolean;
   user: User | null;
   loading: boolean;
-  error: string | null;
-  login: (credentials: LoginCredentials) => Promise<boolean>;
-  loginDoctor: (credentials: DoctorCredentials) => Promise<boolean>;
-  loginABHA: (credentials: ABHACredentials) => Promise<boolean>;
+  
+  // Authentication methods
+  login: (credentials: StandardLoginData) => Promise<void>;
+  doctorLogin: (credentials: DoctorLoginData) => Promise<void>;
+  abhaLogin: (credentials: ABHALoginData) => Promise<void>;
+  register: (userData: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
-  sendOTP: (method: 'mobile' | 'email', value: string) => Promise<boolean>;
-  verifyOTP: (method: 'mobile' | 'email', value: string, otp: string) => Promise<boolean>;
-  clearError: () => void;
-}
-
-interface LoginCredentials {
-  email: string;
-  password: string;
-}
-
-interface DoctorCredentials {
-  facilityId: string;
-  password: string;
-  captcha: string;
-}
-
-interface ABHACredentials {
-  method: 'mobile' | 'abha-address' | 'abha-number' | 'email';
-  value: string;
-  otp?: string;
+  
+  // Profile management
+  updateProfile: (data: Partial<User>) => Promise<void>;
+  
+  // Utility methods
+  checkAuthStatus: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -38,211 +33,149 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  // Initialize authentication state
+  // Check authentication status on app load
   useEffect(() => {
-    initializeAuth();
+    checkAuthStatus();
   }, []);
 
-  /**
-   * Initialize authentication state from stored tokens
-   */
-  const initializeAuth = async () => {
+  const checkAuthStatus = async () => {
     try {
-      setLoading(true);
-      
       if (apiClient.isAuthenticated()) {
-        // Try to get user profile to validate token
         const response = await apiClient.getProfile();
-        
         if (response.status === 'success' && response.data) {
           setUser(response.data);
           setIsAuthenticated(true);
         } else {
-          // Token invalid, clear auth state
-          await logout();
+          // Invalid token, clear auth state
+          setIsAuthenticated(false);
+          setUser(null);
         }
       }
     } catch (error) {
-      console.error('Auth initialization failed:', error);
-      await logout();
+      console.error('Auth check failed:', error);
+      setIsAuthenticated(false);
+      setUser(null);
     } finally {
       setLoading(false);
     }
   };
 
-  /**
-   * Clear error state
-   */
-  const clearError = () => {
-    setError(null);
-  };
-
-  /**
-   * Regular user login (email/password)
-   */
-  const login = async (credentials: LoginCredentials): Promise<boolean> => {
+  const login = async (credentials: StandardLoginData) => {
     try {
       setLoading(true);
-      setError(null);
-
       const response = await apiClient.login(credentials);
-
+      
       if (response.status === 'success' && response.data) {
         setUser(response.data.user);
         setIsAuthenticated(true);
-        return true;
       } else {
-        setError(response.message || 'Login failed');
-        return false;
+        throw new Error(response.message || 'Login failed');
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Login failed';
-      setError(errorMessage);
-      return false;
+      console.error('Login error:', error);
+      throw error;
     } finally {
       setLoading(false);
     }
   };
 
-  /**
-   * Doctor login with facility credentials
-   */
-  const loginDoctor = async (credentials: DoctorCredentials): Promise<boolean> => {
+  const doctorLogin = async (credentials: DoctorLoginData) => {
     try {
       setLoading(true);
-      setError(null);
-
       const response = await apiClient.doctorLogin(credentials);
-
+      
       if (response.status === 'success' && response.data) {
         setUser(response.data.user);
         setIsAuthenticated(true);
-        return true;
       } else {
-        setError(response.message || 'Doctor login failed');
-        return false;
+        throw new Error(response.message || 'Doctor login failed');
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Doctor login failed';
-      setError(errorMessage);
-      return false;
+      console.error('Doctor login error:', error);
+      throw error;
     } finally {
       setLoading(false);
     }
   };
 
-  /**
-   * ABHA login for patients
-   */
-  const loginABHA = async (credentials: ABHACredentials): Promise<boolean> => {
+  const abhaLogin = async (credentials: ABHALoginData) => {
     try {
       setLoading(true);
-      setError(null);
-
       const response = await apiClient.abhaLogin(credentials);
-
+      
       if (response.status === 'success' && response.data) {
         setUser(response.data.user);
         setIsAuthenticated(true);
-        return true;
       } else {
-        setError(response.message || 'ABHA login failed');
-        return false;
+        throw new Error(response.message || 'ABHA login failed');
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'ABHA login failed';
-      setError(errorMessage);
-      return false;
+      console.error('ABHA login error:', error);
+      throw error;
     } finally {
       setLoading(false);
     }
   };
 
-  /**
-   * Send OTP for authentication
-   */
-  const sendOTP = async (method: 'mobile' | 'email', value: string): Promise<boolean> => {
+  const register = async (userData: RegisterData) => {
     try {
       setLoading(true);
-      setError(null);
-
-      const response = await apiClient.sendOTP({ method, value });
-
-      if (response.status === 'success') {
-        return true;
+      const response = await apiClient.register(userData);
+      
+      if (response.status === 'success' && response.data) {
+        setUser(response.data.user);
+        setIsAuthenticated(true);
       } else {
-        setError(response.message || 'Failed to send OTP');
-        return false;
+        throw new Error(response.message || 'Registration failed');
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to send OTP';
-      setError(errorMessage);
-      return false;
+      console.error('Registration error:', error);
+      throw error;
     } finally {
       setLoading(false);
     }
   };
 
-  /**
-   * Verify OTP
-   */
-  const verifyOTP = async (method: 'mobile' | 'email', value: string, otp: string): Promise<boolean> => {
+  const logout = async () => {
     try {
-      setLoading(true);
-      setError(null);
-
-      const response = await apiClient.verifyOTP({ method, value, otp });
-
-      if (response.status === 'success' && response.data?.verified) {
-        return true;
-      } else {
-        setError(response.message || 'OTP verification failed');
-        return false;
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'OTP verification failed';
-      setError(errorMessage);
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  /**
-   * User logout
-   */
-  const logout = async (): Promise<void> => {
-    try {
-      setLoading(true);
       await apiClient.logout();
     } catch (error) {
-      console.error('Logout failed:', error);
+      console.error('Logout error:', error);
     } finally {
       setIsAuthenticated(false);
       setUser(null);
-      setError(null);
-      setLoading(false);
     }
   };
 
-  const value = {
-    isAuthenticated,
-    user,
-    loading,
-    error,
-    login,
-    loginDoctor,
-    loginABHA,
-    logout,
-    sendOTP,
-    verifyOTP,
-    clearError,
+  const updateProfile = async (data: Partial<User>) => {
+    try {
+      const response = await apiClient.updateProfile(data);
+      
+      if (response.status === 'success' && response.data) {
+        setUser(response.data);
+      } else {
+        throw new Error(response.message || 'Profile update failed');
+      }
+    } catch (error) {
+      console.error('Profile update error:', error);
+      throw error;
+    }
   };
 
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={{ 
+      isAuthenticated, 
+      user, 
+      loading,
+      login, 
+      doctorLogin,
+      abhaLogin,
+      register,
+      logout,
+      updateProfile,
+      checkAuthStatus
+    }}>
       {children}
     </AuthContext.Provider>
   );

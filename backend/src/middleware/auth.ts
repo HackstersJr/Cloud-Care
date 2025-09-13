@@ -18,11 +18,10 @@ export interface AuthenticatedRequest extends Request {
 
 // JWT token payload interface
 interface JWTPayload {
-  id: string;
+  userId: string;  // Changed from 'id' to 'userId' to match actual token structure
   email: string;
   role: 'patient' | 'doctor' | 'admin' | 'nurse';
-  abhaId?: string;
-  permissions?: string[];
+  sessionId: string;
   isVerified: boolean;
   iat: number;
   exp: number;
@@ -58,11 +57,11 @@ export const validateJWT = async (
 
     // Attach user information to request
     req.user = {
-      id: decoded.id,
+      id: decoded.userId,  // Map userId to id for the req.user interface
       email: decoded.email,
       role: decoded.role,
-      abhaId: decoded.abhaId,
-      permissions: decoded.permissions || [],
+      abhaId: undefined,  // Not included in current JWT payload
+      permissions: [],    // Not included in current JWT payload
       isVerified: decoded.isVerified
     };
 
@@ -254,11 +253,11 @@ export const optionalJWT = (req: AuthenticatedRequest, res: Response, next: Next
       if (token) {
         const decoded = jwt.verify(token, config.jwt.secret) as JWTPayload;
         req.user = {
-          id: decoded.id,
+          id: decoded.userId,  // Map userId to id for the req.user interface
           email: decoded.email,
           role: decoded.role,
-          abhaId: decoded.abhaId,
-          permissions: decoded.permissions || [],
+          abhaId: undefined,  // Not included in current JWT payload
+          permissions: [],    // Not included in current JWT payload
           isVerified: decoded.isVerified
         };
       }

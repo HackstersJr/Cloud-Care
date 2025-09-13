@@ -1,0 +1,607 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Users table (base authentication)
+model User {
+  id                   String    @id @default(uuid()) @db.Uuid
+  email                String    @unique @db.VarChar(255)
+  passwordHash         String    @map("password_hash") @db.VarChar(255)
+  role                 UserRole
+  isVerified           Boolean   @default(false) @map("is_verified")
+  isEmailVerified      Boolean   @default(false) @map("is_email_verified")
+  lastLoginAt          DateTime? @map("last_login_at") @db.Timestamptz
+  profileCompleted     Boolean   @default(false) @map("profile_completed")
+  twoFactorEnabled     Boolean   @default(false) @map("two_factor_enabled")
+  permissions          String[]  @default([])
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  isActive             Boolean   @default(true) @map("is_active")
+
+  // Relations
+  patient              Patient?
+  doctor               Doctor?
+  nurse                Nurse?
+  refreshTokens        RefreshToken[]
+  passwordResetTokens  PasswordResetToken[]
+  auditLogs            AuditLog[]
+  notifications        Notification[]
+  qrShareTokens        QrShareToken[]
+  systemConfigUpdates  SystemConfig[]
+  familyLinksApproved  FamilyLink[] @relation("FamilyLinkApprover")
+
+  @@map("users")
+}
+
+// Patients table
+model Patient {
+  id                 String    @id @default(uuid()) @db.Uuid
+  userId             String    @unique @map("user_id") @db.Uuid
+  firstName          String    @map("first_name") @db.VarChar(100)
+  lastName           String    @map("last_name") @db.VarChar(100)
+  dateOfBirth        DateTime  @map("date_of_birth") @db.Date
+  gender             Gender?
+  phoneNumber        String    @map("phone_number") @db.VarChar(20)
+  emergencyContact   Json?     @map("emergency_contact")
+  address            Json      @map("address")
+  abhaId             String?   @unique @map("abha_id") @db.VarChar(50)
+  bloodType          BloodType? @map("blood_type")
+  allergies          String[]  @default([])
+  chronicConditions  String[]  @default([]) @map("chronic_conditions")
+  insuranceInfo      Json?     @map("insurance_info")
+  familyHistory      Json[]    @default([]) @map("family_history")
+  preferredLanguage  String    @default("en") @map("preferred_language") @db.VarChar(10)
+  maritalStatus      MaritalStatus? @map("marital_status")
+  occupation         String?   @db.VarChar(100)
+  nextOfKin          Json?     @map("next_of_kin")
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  isActive           Boolean   @default(true) @map("is_active")
+
+  // Relations
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  medicalRecords     MedicalRecord[]
+  appointments       Appointment[]
+  primaryFamilyLinks FamilyLink[] @relation("PrimaryPatient")
+  linkedFamilyLinks  FamilyLink[] @relation("LinkedPatient")
+  qrCodeShares       QrCodeShare[]
+  blockchainRecords  BlockchainRecord[]
+  consentRequests    ConsentRequest[]
+  consentApprovals   ConsentApproval[]
+
+  @@map("patients")
+}
+
+// Doctors table
+model Doctor {
+  id                   String    @id @default(uuid()) @db.Uuid
+  userId               String    @unique @map("user_id") @db.Uuid
+  firstName            String    @map("first_name") @db.VarChar(100)
+  lastName             String    @map("last_name") @db.VarChar(100)
+  licenseNumber        String    @unique @map("license_number") @db.VarChar(50)
+  specialization       String[]
+  qualification        String[]
+  experience           Int       @default(0)
+  phoneNumber          String    @map("phone_number") @db.VarChar(20)
+  hospitalAffiliation  String[]  @default([]) @map("hospital_affiliation")
+  consultationFee      Decimal?  @map("consultation_fee") @db.Decimal(10, 2)
+  availableHours       Json[]    @default([]) @map("available_hours")
+  rating               Decimal   @default(0.00) @db.Decimal(3, 2)
+  reviewCount          Int       @default(0) @map("review_count")
+  isVerified           Boolean   @default(false) @map("is_verified")
+  abhaId               String?   @unique @map("abha_id") @db.VarChar(50)
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  isActive             Boolean   @default(true) @map("is_active")
+
+  // Relations
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  medicalRecords       MedicalRecord[]
+  appointments         Appointment[]
+
+  @@map("doctors")
+}
+
+// Nurses table
+model Nurse {
+  id                  String    @id @default(uuid()) @db.Uuid
+  userId              String    @unique @map("user_id") @db.Uuid
+  firstName           String    @map("first_name") @db.VarChar(100)
+  lastName            String    @map("last_name") @db.VarChar(100)
+  licenseNumber       String    @unique @map("license_number") @db.VarChar(50)
+  qualification       String[]
+  specialization      String[]  @default([])
+  experience          Int       @default(0)
+  phoneNumber         String    @map("phone_number") @db.VarChar(20)
+  hospitalAffiliation String[]  @default([]) @map("hospital_affiliation")
+  shift               Shift?
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  isActive            Boolean   @default(true) @map("is_active")
+
+  // Relations
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("nurses")
+}
+
+// Medical records table (core PHI storage)
+model MedicalRecord {
+  id                    String    @id @default(uuid()) @db.Uuid
+  patientId             String    @map("patient_id") @db.Uuid
+  doctorId              String?   @map("doctor_id") @db.Uuid
+  recordType            RecordType @map("record_type")
+  title                 String    @db.VarChar(255)
+  description           String
+  diagnosis             String[]  @default([])
+  symptoms              String[]  @default([])
+  medications           Json[]    @default([])
+  labResults            Json[]    @default([]) @map("lab_results")
+  imagingResults        Json[]    @default([]) @map("imaging_results")
+  notes                 String?
+  visitDate             DateTime  @map("visit_date") @db.Timestamptz
+  followUpRequired      Boolean   @default(false) @map("follow_up_required")
+  followUpDate          DateTime? @map("follow_up_date") @db.Timestamptz
+  severity              Severity?
+  status                RecordStatus @default(active)
+  files                 Json[]    @default([])
+  confidentialityLevel  ConfidentialityLevel @default(restricted) @map("confidentiality_level")
+  blockchainHash        String?   @map("blockchain_hash") @db.VarChar(255)
+  shareableViaQr        Boolean   @default(false) @map("shareable_via_qr")
+  qrExpiresAt           DateTime? @map("qr_expires_at") @db.Timestamptz
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  isActive              Boolean   @default(true) @map("is_active")
+
+  // Relations
+  patient               Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor                Doctor?   @relation(fields: [doctorId], references: [id])
+  qrCodeShares          QrCodeShare[]
+  blockchainRecords     BlockchainRecord[]
+
+  @@map("medical_records")
+}
+
+// Appointments table
+model Appointment {
+  id               String    @id @default(uuid()) @db.Uuid
+  patientId        String    @map("patient_id") @db.Uuid
+  doctorId         String    @map("doctor_id") @db.Uuid
+  appointmentDate  DateTime  @map("appointment_date") @db.Timestamptz
+  duration         Int       @default(30) // minutes
+  type             AppointmentType
+  status           AppointmentStatus @default(scheduled)
+  reason           String
+  notes            String?
+  reminderSent     Boolean   @default(false) @map("reminder_sent")
+  telehealth       Boolean   @default(false)
+  meetingLink      String?   @map("meeting_link") @db.VarChar(500)
+  fee              Decimal?  @db.Decimal(10, 2)
+  paymentStatus    PaymentStatus? @map("payment_status")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  isActive         Boolean   @default(true) @map("is_active")
+
+  // Relations
+  patient          Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor           Doctor    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@map("appointments")
+}
+
+// Family links table (for family account linking)
+model FamilyLink {
+  id                String    @id @default(uuid()) @db.Uuid
+  primaryPatientId  String    @map("primary_patient_id") @db.Uuid
+  linkedPatientId   String    @map("linked_patient_id") @db.Uuid
+  relationship      String    @db.VarChar(50)
+  accessLevel       AccessLevel @default(limited) @map("access_level")
+  approvedBy        String?   @map("approved_by") @db.Uuid
+  expiresAt         DateTime? @map("expires_at") @db.Timestamptz
+  permissions       String[]  @default([])
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  isActive          Boolean   @default(true) @map("is_active")
+
+  // Relations
+  primaryPatient    Patient   @relation("PrimaryPatient", fields: [primaryPatientId], references: [id], onDelete: Cascade)
+  linkedPatient     Patient   @relation("LinkedPatient", fields: [linkedPatientId], references: [id], onDelete: Cascade)
+  approver          User?     @relation("FamilyLinkApprover", fields: [approvedBy], references: [id])
+
+  @@unique([primaryPatientId, linkedPatientId])
+  @@map("family_links")
+}
+
+// QR code sharing table (legacy)
+model QrCodeShare {
+  id           String    @id @default(uuid()) @db.Uuid
+  recordId     String    @map("record_id") @db.Uuid
+  patientId    String    @map("patient_id") @db.Uuid
+  createdBy    String?   @map("created_by") @db.Uuid
+  token        String    @unique @db.VarChar(255)
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz
+  accessCount  Int       @default(0) @map("access_count")
+  maxAccesses  Int?      @map("max_accesses")
+  permissions  String[]  @default([])
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  isActive     Boolean   @default(true) @map("is_active")
+
+  // Relations
+  record       MedicalRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  patient      Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  accessLogs   QrAccessLog[]
+
+  @@map("qr_code_shares")
+}
+
+// QR access log table
+model QrAccessLog {
+  id          String    @id @default(uuid()) @db.Uuid
+  qrShareId   String    @map("qr_share_id") @db.Uuid
+  accessedAt  DateTime  @default(now()) @map("accessed_at") @db.Timestamptz
+  ipAddress   String    @map("ip_address") @db.Inet
+  userAgent   String?   @map("user_agent")
+  location    String?
+
+  // Relations
+  qrShare     QrCodeShare @relation(fields: [qrShareId], references: [id], onDelete: Cascade)
+
+  @@map("qr_access_logs")
+}
+
+// QR Share Tokens table (new implementation)
+model QrShareToken {
+  id             String    @id @default(uuid()) @db.Uuid
+  token          String    @unique @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  recordIds      String[]  @map("record_ids")
+  facilityId     String?   @map("facility_id") @db.VarChar(255)
+  shareType      ShareType @map("share_type")
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz
+  accessCount    Int       @default(0) @map("access_count")
+  lastAccessed   DateTime? @map("last_accessed") @db.Timestamptz
+  revoked        Boolean   @default(false)
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz
+  blockchainHash String    @map("blockchain_hash") @db.VarChar(255)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("qr_share_tokens")
+}
+
+// Blockchain records table
+model BlockchainRecord {
+  id               String    @id @default(uuid()) @db.Uuid
+  recordId         String    @map("record_id") @db.Uuid
+  patientId        String    @map("patient_id") @db.Uuid
+  transactionHash  String    @unique @map("transaction_hash") @db.VarChar(255)
+  blockNumber      BigInt?   @map("block_number")
+  contractAddress  String    @map("contract_address") @db.VarChar(255)
+  dataHash         String    @map("data_hash") @db.VarChar(255)
+  gasUsed          Int?      @map("gas_used")
+  status           BlockchainStatus @default(pending)
+  networkId        String    @map("network_id") @db.VarChar(50)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  isActive         Boolean   @default(true) @map("is_active")
+
+  // Relations
+  record           MedicalRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  patient          Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("blockchain_records")
+}
+
+// Refresh tokens table for JWT refresh functionality
+model RefreshToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  tokenHash  String    @map("token_hash") @db.VarChar(255)
+  expiresAt  DateTime  @map("expires_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  createdIp  String?   @map("created_ip") @db.Inet
+  isRevoked  Boolean   @default(false) @map("is_revoked")
+
+  // Relations
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+// Password reset tokens table
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @map("token_hash") @db.VarChar(255)
+  expiresAt DateTime  @map("expires_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  usedAt    DateTime? @map("used_at")
+  isUsed    Boolean   @default(false) @map("is_used")
+
+  // Relations
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_reset_tokens")
+}
+
+// Audit logs table (HIPAA compliance)
+model AuditLog {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String?   @map("user_id") @db.Uuid
+  action       String    @db.VarChar(100)
+  resource     String    @db.VarChar(100)
+  resourceId   String?   @map("resource_id") @db.Uuid
+  ipAddress    String    @map("ip_address") @db.Inet
+  userAgent    String?   @map("user_agent")
+  details      Json?
+  timestamp    DateTime  @default(now()) @db.Timestamptz
+  success      Boolean   @default(true)
+  errorMessage String?   @map("error_message")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  isActive     Boolean   @default(true) @map("is_active")
+
+  // Relations
+  user         User?     @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+// Notifications table
+model Notification {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  type           NotificationType
+  title          String    @db.VarChar(255)
+  message        String
+  priority       Priority  @default(medium)
+  isRead         Boolean   @default(false) @map("is_read")
+  readAt         DateTime? @map("read_at") @db.Timestamptz
+  actionRequired Boolean   @default(false) @map("action_required")
+  actionUrl      String?   @map("action_url") @db.VarChar(500)
+  expiresAt      DateTime? @map("expires_at") @db.Timestamptz
+  metadata       Json?
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  isActive       Boolean   @default(true) @map("is_active")
+
+  // Relations
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+// System configuration table
+model SystemConfig {
+  id               String    @id @default(uuid()) @db.Uuid
+  key              String    @unique @db.VarChar(100)
+  value            String
+  description      String?
+  category         String    @db.VarChar(50)
+  isPublic         Boolean   @default(false) @map("is_public")
+  lastModifiedBy   String?   @map("last_modified_by") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  isActive         Boolean   @default(true) @map("is_active")
+
+  // Relations
+  lastModifier     User?     @relation(fields: [lastModifiedBy], references: [id])
+
+  @@map("system_config")
+}
+
+// Enums
+enum UserRole {
+  patient
+  doctor
+  nurse
+  admin
+}
+
+enum Gender {
+  male
+  female
+  other
+  prefer_not_to_say
+}
+
+enum BloodType {
+  A_POSITIVE @map("A+")
+  A_NEGATIVE @map("A-")
+  B_POSITIVE @map("B+")
+  B_NEGATIVE @map("B-")
+  AB_POSITIVE @map("AB+")
+  AB_NEGATIVE @map("AB-")
+  O_POSITIVE @map("O+")
+  O_NEGATIVE @map("O-")
+  unknown
+}
+
+enum MaritalStatus {
+  single
+  married
+  divorced
+  widowed
+}
+
+enum Shift {
+  day
+  night
+  rotating
+}
+
+enum RecordType {
+  consultation
+  prescription
+  lab_report
+  imaging
+  surgery
+  vaccination
+  allergy
+  other
+}
+
+enum Severity {
+  low
+  medium
+  high
+  critical
+}
+
+enum RecordStatus {
+  active
+  resolved
+  chronic
+  monitoring
+}
+
+enum ConfidentialityLevel {
+  public
+  restricted
+  confidential
+}
+
+enum AppointmentType {
+  consultation
+  follow_up @map("follow-up")
+  emergency
+  surgery
+  checkup
+}
+
+enum AppointmentStatus {
+  scheduled
+  confirmed
+  in_progress @map("in-progress")
+  completed
+  cancelled
+  no_show @map("no-show")
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  failed
+}
+
+enum AccessLevel {
+  full
+  limited
+  emergency_only @map("emergency-only")
+}
+
+enum ShareType {
+  full
+  summary
+  emergency
+}
+
+enum BlockchainStatus {
+  pending
+  confirmed
+  failed
+}
+
+enum NotificationType {
+  appointment
+  medication
+  lab_result @map("lab-result")
+  emergency
+  system
+  family_request @map("family-request")
+}
+
+enum Priority {
+  low
+  medium
+  high
+  urgent
+}
+
+enum ConsentType {
+  data_access
+  subscription
+  emergency_access
+  research
+}
+
+enum ConsentStatus {
+  pending
+  approved
+  denied
+  expired
+  revoked
+}
+
+enum PermissionLevel {
+  read
+  write
+  full_access
+}
+
+enum ConsentAction {
+  approved
+  denied
+  revoked
+}
+
+// Consent Requests model
+model ConsentRequest {
+  id               String            @id @default(uuid()) @db.Uuid
+  patientId        String            @map("patient_id") @db.Uuid
+  facilityId       String?           @map("facility_id") @db.Uuid
+  facilityName     String            @map("facility_name") @db.VarChar(255)
+  requestorName    String            @map("requestor_name") @db.VarChar(255)
+  requestorEmail   String            @map("requestor_email") @db.VarChar(255)
+  consentType      ConsentType       @map("consent_type")
+  purpose          String
+  permissionLevel  PermissionLevel   @map("permission_level")
+  dataTypes        String[]          @map("data_types")
+  status           ConsentStatus     @default(pending)
+  requestedDate    DateTime          @default(now()) @map("requested_date") @db.Timestamptz
+  validFrom        DateTime?         @map("valid_from") @db.Timestamptz
+  validTo          DateTime?         @map("valid_to") @db.Timestamptz
+  approvedDate     DateTime?         @map("approved_date") @db.Timestamptz
+  deniedDate       DateTime?         @map("denied_date") @db.Timestamptz
+  revokedDate      DateTime?         @map("revoked_date") @db.Timestamptz
+  blockchainHash   String?           @map("blockchain_hash") @db.VarChar(255)
+  metadata         Json              @default("{}") @db.JsonB
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  patient          Patient           @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  approvals        ConsentApproval[]
+
+  @@map("consent_requests")
+}
+
+// Consent Approvals model (audit trail)
+model ConsentApproval {
+  id                String         @id @default(uuid()) @db.Uuid
+  consentRequestId  String         @map("consent_request_id") @db.Uuid
+  patientId         String         @map("patient_id") @db.Uuid
+  action            ConsentAction
+  reason            String?
+  ipAddress         String?        @map("ip_address")
+  userAgent         String?        @map("user_agent")
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  consentRequest    ConsentRequest @relation(fields: [consentRequestId], references: [id], onDelete: Cascade)
+  patient           Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("consent_approvals")
+}

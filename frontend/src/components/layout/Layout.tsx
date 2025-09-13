@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
-import { Menu, Bell, User, QrCode } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Menu, Bell, QrCode } from 'lucide-react';
 import BottomNavigation from './BottomNavigation';
 import SideMenu from './SideMenu';
+import ProfileDropdown from './ProfileDropdown';
+import PatientDataQRGenerator from '../PatientDataQRGenerator';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -10,6 +13,16 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children, title }) => {
   const [showMenu, setShowMenu] = useState(false);
+  const [showQRGenerator, setShowQRGenerator] = useState(false);
+  const navigate = useNavigate();
+
+  const handleQRClick = () => {
+    setShowQRGenerator(true);
+  };
+
+  const handleTitleClick = () => {
+    navigate('/dashboard');
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -24,22 +37,29 @@ const Layout: React.FC<LayoutProps> = ({ children, title }) => {
               >
                 <Menu className="w-6 h-6" />
               </button>
-              <h1 className="ml-2 text-lg font-semibold text-gray-900">{title}</h1>
+              <button 
+                onClick={handleTitleClick}
+                className="ml-2 text-lg font-semibold text-gray-900 hover:text-blue-600 transition-colors"
+              >
+                {title}
+              </button>
             </div>
             
             <div className="flex items-center space-x-2">
-              <button className="p-2 text-gray-600 hover:text-gray-900">
+              <button 
+                onClick={handleQRClick}
+                className="p-2 text-gray-600 hover:text-gray-900"
+                title="Generate my QR code"
+              >
                 <QrCode className="w-5 h-5" />
               </button>
-              <button className="p-2 text-gray-600 hover:text-gray-900 relative">
+              <button className="p-2 text-gray-600 hover:text-gray-900 relative" title="Notifications">
                 <Bell className="w-5 h-5" />
                 <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center text-[10px]">
                   18
                 </span>
               </button>
-              <button className="p-2 text-gray-600 hover:text-gray-900">
-                <User className="w-5 h-5" />
-              </button>
+              <ProfileDropdown />
             </div>
           </div>
         </div>
@@ -55,6 +75,12 @@ const Layout: React.FC<LayoutProps> = ({ children, title }) => {
 
       {/* Side Menu */}
       <SideMenu isOpen={showMenu} onClose={() => setShowMenu(false)} />
+
+      {/* Patient QR Generator Modal */}
+      <PatientDataQRGenerator 
+        isOpen={showQRGenerator} 
+        onClose={() => setShowQRGenerator(false)} 
+      />
     </div>
   );
 };

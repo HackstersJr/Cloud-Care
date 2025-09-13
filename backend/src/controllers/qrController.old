@@ -1,0 +1,585 @@
+import { Request, Response } from 'express';
+import { v4 as uuidv4 } from 'uuid';
+import * as crypto from 'crypto';
+import QRCode from 'qrcode';
+import { prisma } from '../services/prisma';
+import { blockchainService } from '../services/blockchain';
+
+// Extend Request interface to include user
+interface AuthenticatedRequest extends Request {
+  user?: {
+    id: string;
+    email: string;
+    role: string;
+  };
+}
+
+export class QRController {
+  /**
+   * Generate QR code for sharing medical records with consent
+   * POST /qr/generate
+   */
+  async generateQRCode(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const { recordIds, facilityId, expiresInHours = 24, shareType = 'full' } = req.body;
+      const userId = req.user?.id;
+
+      if (!userId) {
+        res.status(401).json({
+          status: 'error',
+          message: 'User authentication required'
+        });
+        return;
+      }
+
+      if (!recordIds || !Array.isArray(recordIds) || recordIds.length === 0) {
+        res.status(400).json({
+          status: 'error',
+          message: 'Record IDs are required'
+        });
+        return;
+      }
+
+      // Handle "all" records case
+      let actualRecordIds = recordIds;
+      if (recordIds.length === 1 && recordIds[0] === 'all') {
+        // Get all records for the user
+        const allRecords = await database.query<MedicalRecord>(
+          'SELECT id FROM medical_records WHERE patient_id = $1',
+          [userId]
+        );
+        actualRecordIds = allRecords.rows.map(record => record.id);
+        
+        if (actualRecordIds.length === 0) {
+          res.status(404).json({
+            status: 'error',
+            message: 'No medical records found for user'
+          });
+          return;
+        }
+      }
+
+      // Verify user owns all records
+      const records = await database.query<MedicalRecord>(
+        'SELECT * FROM medical_records WHERE id = ANY($1) AND patient_id = $2',
+        [actualRecordIds, userId]
+      );
+
+      if (records.rows.length !== actualRecordIds.length) {
+        res.status(403).json({
+          status: 'error',
+          message: 'Access denied to one or more records'
+        });
+        return;
+      }
+
+      // Generate unique share token
+      const shareToken = uuidv4();
+      const expiresAt = new Date(Date.now() + expiresInHours * 60 * 60 * 1000);
+
+      // Create QR share data
+      const qrData = {
+        token: shareToken,
+        type: 'MEDICAL_RECORDS_SHARE',
+        version: '1.0',
+        shareType,
+        recordCount: actualRecordIds.length,
+        generatedAt: new Date().toISOString(),
+        expiresAt: expiresAt.toISOString(),
+        checksum: this.generateChecksum(shareToken + userId + actualRecordIds.join(','))
+      };
+
+      // Store consent record on blockchain
+      const consentData = {
+        patientId: userId,
+        recordIds: actualRecordIds,
+        facilityId: facilityId || 'public',
+        shareType,
+        token: shareToken,
+        expiresAt: expiresAt.toISOString(),
+        permissions: {
+          read: true,
+          download: shareType === 'full',
+          timeAccess: shareType === 'emergency' ? 'unlimited' : 'limited'
+        }
+      };
+
+      console.log('Creating blockchain consent record...');
+      const blockchainTx = await blockchainService.createConsentRecord(consentData);
+
+      // Store QR token in database
+      await database.query(
+        `INSERT INTO qr_share_tokens 
+         (token, user_id, record_ids, facility_id, share_type, expires_at, blockchain_hash, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
+        [shareToken, userId, actualRecordIds, facilityId, shareType, expiresAt, blockchainTx.hash]
+      );
+
+      // Mark records as shareable via QR
+      await database.query(
+        'UPDATE medical_records SET shareable_via_qr = true, qr_expires_at = $1 WHERE id = ANY($2)',
+        [expiresAt, actualRecordIds]
+      );
+
+      // Generate QR code
+      const qrCodeUrl = `${process.env.FRONTEND_URL}/qr/access/${shareToken}`;
+      const qrCodeImage = await QRCode.toDataURL(JSON.stringify({
+        ...qrData,
+        url: qrCodeUrl
+      }), {
+        errorCorrectionLevel: 'M',
+        type: 'image/png',
+        margin: 1,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        },
+        width: 256
+      });
+
+      // Log access attempt on blockchain
+      await blockchainService.logDataAccess({
+        patientId: userId,
+        action: 'QR_GENERATED',
+        recordIds: actualRecordIds,
+        facilityId: facilityId || 'self',
+        timestamp: new Date().toISOString(),
+        metadata: { shareType, expiresInHours }
+      });
+
+      res.json({
+        status: 'success',
+        message: 'QR code generated successfully',
+        data: {
+          qrCode: qrCodeImage,
+          qrData,
+          shareToken,
+          expiresAt: expiresAt.toISOString(),
+          blockchainHash: blockchainTx.hash,
+          accessUrl: qrCodeUrl,
+          recordCount: actualRecordIds.length
+        },
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error: any) {
+      console.error('QR generation error:', error);
+      res.status(500).json({
+        status: 'error',
+        message: 'Failed to generate QR code',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  }
+
+  /**
+   * Access medical records via QR token
+   * GET /qr/access/:token
+   */
+  async accessViaQR(req: Request, res: Response): Promise<void> {
+    try {
+      const { token } = req.params;
+      const { facilityId, accessorId } = req.query;
+
+      if (!token) {
+        res.status(400).json({
+          status: 'error',
+          message: 'QR token is required'
+        });
+        return;
+      }
+
+      // Verify token exists and is not expired
+      const tokenData = await database.query<QRShareToken>(
+        'SELECT * FROM qr_share_tokens WHERE token = $1 AND expires_at > NOW()',
+        [token]
+      );
+
+      if (tokenData.rows.length === 0) {
+        res.status(404).json({
+          status: 'error',
+          message: 'QR token not found or expired'
+        });
+        return;
+      }
+
+      const shareData = tokenData.rows[0];
+      if (!shareData) {
+        res.status(404).json({
+          status: 'error',
+          message: 'QR token not found or expired'
+        });
+        return;
+      }
+
+      // Verify blockchain consent record
+      const consentValid = await blockchainService.verifyConsentRecord(
+        shareData.blockchain_hash
+      );
+
+      if (!consentValid) {
+        res.status(403).json({
+          status: 'error',
+          message: 'Blockchain consent verification failed'
+        });
+        return;
+      }
+
+      // Get patient information
+      const patient = await database.query<User>(
+        'SELECT id, first_name, last_name, email, abha_id, phone FROM users WHERE id = $1',
+        [shareData.user_id]
+      );
+
+      if (patient.rows.length === 0) {
+        res.status(404).json({
+          status: 'error',
+          message: 'Patient not found'
+        });
+        return;
+      }
+
+      // Get medical records
+      const records = await database.query<MedicalRecord>(
+        'SELECT * FROM medical_records WHERE id = ANY($1) AND patient_id = $2',
+        [shareData.record_ids, shareData.user_id]
+      );
+
+      // Filter data based on share type
+      let sharedData = records.rows;
+      if (shareData.share_type === 'summary') {
+        sharedData = records.rows.map(record => ({
+          ...record,
+          data: this.summarizeRecordData(record.data),
+          attachments: [] // Remove attachments for summary
+        }));
+      } else if (shareData.share_type === 'emergency') {
+        sharedData = records.rows.filter(record => 
+          record.category === 'emergency' || 
+          record.category === 'critical' ||
+          (record as any).tags?.includes('emergency')
+        );
+      }
+
+      // Log blockchain access
+      await blockchainService.logDataAccess({
+        patientId: shareData.user_id,
+        action: 'QR_ACCESSED',
+        recordIds: shareData.record_ids,
+        facilityId: facilityId as string || 'unknown',
+        accessorId: accessorId as string,
+        timestamp: new Date().toISOString(),
+        metadata: { 
+          shareType: shareData.share_type,
+          tokenUsed: token
+        }
+      });
+
+      // Update access count
+      await database.query(
+        'UPDATE qr_share_tokens SET access_count = access_count + 1, last_accessed = NOW() WHERE token = $1',
+        [token]
+      );
+
+      res.json({
+        status: 'success',
+        message: 'Records accessed successfully',
+        data: {
+          patient: patient.rows[0],
+          records: sharedData,
+          shareInfo: {
+            shareType: shareData.share_type,
+            expiresAt: shareData.expires_at,
+            accessCount: shareData.access_count + 1,
+            facilityId: shareData.facility_id
+          },
+          blockchain: {
+            verified: true,
+            hash: shareData.blockchain_hash
+          }
+        },
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error: any) {
+      console.error('QR access error:', error);
+      res.status(500).json({
+        status: 'error',
+        message: 'Failed to access records via QR',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  }
+
+  /**
+   * Validate QR token without accessing data
+   * POST /qr/validate
+   */
+  async validateQRToken(req: Request, res: Response): Promise<void> {
+    try {
+      const { token, checksum } = req.body;
+
+      if (!token) {
+        res.status(400).json({
+          status: 'error',
+          message: 'QR token is required'
+        });
+        return;
+      }
+
+      // Check token existence and expiry
+      const tokenData = await database.query<QRShareToken>(
+        'SELECT token, user_id, record_ids, expires_at, share_type, facility_id, blockchain_hash FROM qr_share_tokens WHERE token = $1',
+        [token]
+      );
+
+      if (tokenData.rows.length === 0) {
+        res.status(404).json({
+          status: 'error',
+          message: 'QR token not found',
+          valid: false
+        });
+        return;
+      }
+
+      const shareData = tokenData.rows[0];
+      if (!shareData) {
+        res.status(404).json({
+          status: 'error',
+          message: 'QR token not found',
+          valid: false
+        });
+        return;
+      }
+      
+      const isExpired = new Date(shareData.expires_at) < new Date();
+
+      if (isExpired) {
+        res.status(410).json({
+          status: 'error',
+          message: 'QR token has expired',
+          valid: false,
+          expiresAt: shareData.expires_at
+        });
+        return;
+      }
+
+      // Verify checksum if provided
+      if (checksum) {
+        const expectedChecksum = this.generateChecksum(
+          token + shareData.user_id + shareData.record_ids.join(',')
+        );
+        if (checksum !== expectedChecksum) {
+          res.status(400).json({
+            status: 'error',
+            message: 'Invalid QR code checksum',
+            valid: false
+          });
+          return;
+        }
+      }
+
+      // Verify blockchain consent
+      const consentValid = await blockchainService.verifyConsentRecord(
+        shareData.blockchain_hash
+      );
+
+      res.json({
+        status: 'success',
+        message: 'QR token is valid',
+        data: {
+          valid: true,
+          token,
+          shareType: shareData.share_type,
+          recordCount: shareData.record_ids.length,
+          expiresAt: shareData.expires_at,
+          facilityId: shareData.facility_id,
+          blockchain: {
+            verified: consentValid,
+            hash: shareData.blockchain_hash
+          }
+        },
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error: any) {
+      console.error('QR validation error:', error);
+      res.status(500).json({
+        status: 'error',
+        message: 'Failed to validate QR token',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  }
+
+  /**
+   * Revoke QR token and blockchain consent
+   * DELETE /qr/revoke/:token
+   */
+  async revokeQRToken(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const { token } = req.params;
+      const userId = req.user?.id;
+
+      if (!userId) {
+        res.status(401).json({
+          status: 'error',
+          message: 'User authentication required'
+        });
+        return;
+      }
+
+      // Verify token belongs to user
+      const tokenData = await database.query<QRShareToken>(
+        'SELECT * FROM qr_share_tokens WHERE token = $1 AND user_id = $2',
+        [token, userId]
+      );
+
+      if (tokenData.rows.length === 0) {
+        res.status(404).json({
+          status: 'error',
+          message: 'QR token not found or access denied'
+        });
+        return;
+      }
+
+      const shareData = tokenData.rows[0];
+      if (!shareData) {
+        res.status(404).json({
+          status: 'error',
+          message: 'QR token not found or access denied'
+        });
+        return;
+      }
+
+      // Revoke on blockchain
+      await blockchainService.revokeConsent(shareData.blockchain_hash);
+
+      // Mark token as revoked in database
+      await database.query(
+        'UPDATE qr_share_tokens SET revoked = true, revoked_at = NOW() WHERE token = $1',
+        [token]
+      );
+
+      // Update medical records
+      await database.query(
+        'UPDATE medical_records SET shareable_via_qr = false, qr_expires_at = NULL WHERE id = ANY($1)',
+        [shareData.record_ids]
+      );
+
+      // Log revocation on blockchain
+      await blockchainService.logDataAccess({
+        patientId: userId,
+        action: 'QR_REVOKED',
+        recordIds: shareData.record_ids,
+        facilityId: shareData.facility_id || 'self',
+        timestamp: new Date().toISOString(),
+        metadata: { token, reason: 'user_revoked' }
+      });
+
+      res.json({
+        status: 'success',
+        message: 'QR token revoked successfully',
+        data: {
+          token,
+          revokedAt: new Date().toISOString()
+        },
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error: any) {
+      console.error('QR revocation error:', error);
+      res.status(500).json({
+        status: 'error',
+        message: 'Failed to revoke QR token',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  }
+
+  /**
+   * Get user's QR sharing history
+   * GET /qr/history
+   */
+  async getQRHistory(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.id;
+      const { page = 1, limit = 20 } = req.query;
+
+      if (!userId) {
+        res.status(401).json({
+          status: 'error',
+          message: 'User authentication required'
+        });
+        return;
+      }
+
+      const offset = (Number(page) - 1) * Number(limit);
+
+      const history = await database.query<QRShareToken>(
+        `SELECT token, record_ids, facility_id, share_type, expires_at, access_count, 
+                created_at, last_accessed, revoked, revoked_at, blockchain_hash
+         FROM qr_share_tokens 
+         WHERE user_id = $1 
+         ORDER BY created_at DESC 
+         LIMIT $2 OFFSET $3`,
+        [userId, Number(limit), offset]
+      );
+
+      const total = await database.query<{ count: number }>(
+        'SELECT COUNT(*) as count FROM qr_share_tokens WHERE user_id = $1',
+        [userId]
+      );
+
+      const totalCount = total.rows[0]?.count || 0;
+
+      res.json({
+        status: 'success',
+        message: 'QR history retrieved successfully',
+        data: {
+          history: history.rows,
+          pagination: {
+            page: Number(page),
+            limit: Number(limit),
+            total: totalCount,
+            pages: Math.ceil(totalCount / Number(limit))
+          }
+        },
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error: any) {
+      console.error('QR history error:', error);
+      res.status(500).json({
+        status: 'error',
+        message: 'Failed to retrieve QR history',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  }
+
+  /**
+   * Generate checksum for QR data integrity
+   */
+  private generateChecksum(data: string): string {
+    return crypto.createHash('sha256').update(data).digest('hex').substring(0, 16);
+  }
+
+  /**
+   * Summarize medical record data for limited sharing
+   */
+  private summarizeRecordData(data: any): any {
+    return {
+      diagnosis: data.diagnosis || 'Not specified',
+      medications: data.medications?.slice(0, 3) || [],
+      vitals: data.vitals ? {
+        bloodPressure: data.vitals.bloodPressure,
+        heartRate: data.vitals.heartRate,
+        temperature: data.vitals.temperature
+      } : null,
+      summary: data.summary || data.notes?.substring(0, 200) || 'No summary available'
+    };
+  }
+}
+
+export const qrController = new QRController();

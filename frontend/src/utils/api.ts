@@ -10,6 +10,13 @@ export interface ApiResponse<T = any> {
   message?: string;
   data?: T;
   timestamp: string;
+  error?: {
+    status: string;
+    statusCode: number;
+    code: string;
+    message: string;
+    timestamp: string;
+  };
 }
 
 export interface AuthTokens {
@@ -20,15 +27,49 @@ export interface AuthTokens {
 export interface User {
   id: string;
   email: string;
-  firstName: string;
-  lastName: string;
+  firstName?: string;
+  lastName?: string;
   role: 'patient' | 'doctor' | 'nurse' | 'admin';
   isActive: boolean;
-  emailVerified: boolean;
+  isVerified: boolean;
+  facilityId?: string;
+  permissions?: string[];
   abhaNumber?: string;
   phoneNumber?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AuthResult {
+  user: User;
+  tokens: AuthTokens;
+}
+
+// Login credentials interfaces
+export interface StandardLoginData {
+  email: string;
+  password: string;
+}
+
+export interface DoctorLoginData {
+  facilityId: string;
+  password: string;
+  captcha: string;
+}
+
+export interface ABHALoginData {
+  method: 'mobile' | 'email' | 'abha-address' | 'abha-number';
+  value: string;
+  otp?: string;
+}
+
+export interface RegisterData {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  role: 'patient' | 'doctor';
 }
 
 export interface MedicalRecord {
@@ -36,24 +77,47 @@ export interface MedicalRecord {
   patientId: string;
   title: string;
   description: string;
-  diagnosis?: string;
-  treatment?: string;
-  medications?: string;
+  diagnosis?: string[];
+  symptoms?: string[];
+  medications?: Array<{
+    name: string;
+    dosage: string;
+    duration: string;
+    frequency: string;
+    instructions?: string;
+  }>;
+  labResults?: Array<{
+    test: string;
+    result: string;
+    status?: string;
+    reference?: string;
+    date?: string;
+  }>;
+  imagingResults?: any[];
+  notes?: string;
   visitDate: string;
   doctorId?: string;
   facilityName?: string;
-  recordType: 'lab_report' | 'prescription' | 'imaging' | 'discharge_summary' | 'general';
+  recordType: 'lab_report' | 'prescription' | 'imaging' | 'discharge_summary' | 'general' | 'consultation';
   confidentialityLevel: 'normal' | 'restricted' | 'confidential';
+  followUpRequired?: boolean;
+  followUpDate?: string | null;
+  severity?: string;
+  status?: string;
+  files?: any[];
+  blockchainHash?: string | null;
+  shareableViaQr?: boolean;
+  qrExpiresAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  isActive: boolean;
   attachments?: Array<{
     fileName: string;
     fileUrl: string;
     fileSize: number;
     mimeType: string;
   }>;
-  blockchainHash?: string;
   isVerified?: boolean;
-  createdAt: string;
-  updatedAt: string;
 }
 
 export interface BlockchainVerification {
@@ -63,6 +127,85 @@ export interface BlockchainVerification {
   transactionHash?: string;
   verifiedAt: string;
   tamperDetected: boolean;
+}
+
+// QR System interfaces
+export interface QRGenerateRequest {
+  recordIds: string[];
+  shareType: 'full' | 'summary' | 'specific' | 'emergency';
+  expiresInHours: number;
+  facilityId?: string;
+}
+
+export interface QRGenerateResponse {
+  qrCode: string;
+  qrData: object;
+  shareToken: string;
+  expiresAt: string;
+  blockchainHash: string;
+  accessUrl: string;
+  recordCount: number;
+}
+
+export interface QRValidationResponse {
+  valid: boolean;
+  patientInfo?: {
+    name: string;
+    age: number;
+    gender: string;
+  };
+  shareType: string;
+  recordCount: number;
+  expiresAt: string;
+  facilitInfo?: {
+    name: string;
+    id: string;
+  };
+  blockchainHash: string;
+  consentVerified: boolean;
+}
+
+export interface QRAccessRequest {
+  accessorId: string;
+  facilityId: string;
+  purpose?: string;
+}
+
+export interface QRAccessResponse {
+  records: Array<{
+    id: string;
+    type: string;
+    title: string;
+    date: string;
+    diagnosis: string[];
+    medications: string[];
+    blockchainVerified: boolean;
+  }>;
+  accessLogged: boolean;
+  blockchainHash: string;
+  patientConsent: string;
+}
+
+export interface QRHistoryResponse {
+  history: Array<{
+    token: string;
+    record_ids: string[];
+    facility_id: string;
+    share_type: string;
+    expires_at: string;
+    access_count: number;
+    created_at: string;
+    last_accessed?: string;
+    revoked: boolean;
+    revoked_at?: string;
+    blockchain_hash: string;
+  }>;
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
 }
 
 class ApiClient {
@@ -366,6 +509,13 @@ class ApiClient {
    */
   async getPatientMedicalRecords(patientId: string): Promise<ApiResponse<MedicalRecord[]>> {
     return this.request(`/medical-records/patient/${patientId}`);
+  }
+
+  /**
+   * Get medical records for the current authenticated user (patients only)
+   */
+  async getMyMedicalRecords(): Promise<ApiResponse<MedicalRecord[]>> {
+    return this.request('/medical-records/my-records');
   }
 
   /**
@@ -720,6 +870,69 @@ class ApiClient {
     return this.request('/health/detailed');
   }
 
+  // ============= QR SHARING SYSTEM APIs (with Blockchain Consent) =============
+
+  /**
+   * Generate QR code for medical record sharing with blockchain consent
+   */
+  async generateQRCode(data: QRGenerateRequest): Promise<ApiResponse<QRGenerateResponse>> {
+    return this.request('/qr/generate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Validate QR token and get sharing metadata
+   */
+  async validateQRToken(token: string): Promise<ApiResponse<QRValidationResponse>> {
+    return this.request(`/qr/validate`, {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+  }
+
+  /**
+   * Access medical records via QR token
+   */
+  async accessViaQR(token: string, accessData: QRAccessRequest): Promise<ApiResponse<QRAccessResponse>> {
+    const queryParams = new URLSearchParams();
+    if (accessData.facilityId) queryParams.append('facilityId', accessData.facilityId);
+    if (accessData.accessorId) queryParams.append('accessorId', accessData.accessorId);
+    if (accessData.purpose) queryParams.append('purpose', accessData.purpose);
+    
+    const queryString = queryParams.toString();
+    const url = `/qr/access/${token}${queryString ? `?${queryString}` : ''}`;
+    
+    return this.request(url, {
+      method: 'GET',
+    });
+  }
+
+  /**
+   * Revoke QR token and update blockchain consent
+   */
+  async revokeQRToken(token: string): Promise<ApiResponse<{
+    revoked: boolean;
+    revokedAt: string;
+    blockchainHash: string;
+    reason: string;
+  }>> {
+    return this.request(`/qr/revoke/${token}`, {
+      method: 'DELETE',
+    });
+  }
+
+  /**
+   * Get QR sharing history with blockchain audit trail
+   */
+  async getQRHistory(): Promise<ApiResponse<QRHistoryResponse>> {
+    return this.request('/qr/history');
+  }
+
   // ============= UTILITY METHODS =============
 
   /**
@@ -727,6 +940,80 @@ class ApiClient {
    */
   isAuthenticated(): boolean {
     return !!this.accessToken;
+  }
+
+  // =============================================================================
+  // CONSENT MANAGEMENT METHODS
+  // =============================================================================
+
+  /**
+   * Get all consent requests for the authenticated patient
+   */
+  async getConsents(params: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    consentType?: string;
+  } = {}): Promise<ApiResponse<{
+    consents: any[];
+    pagination: {
+      currentPage: number;
+      totalPages: number;
+      totalItems: number;
+      itemsPerPage: number;
+    };
+  }>> {
+    const searchParams = new URLSearchParams();
+    
+    if (params.page) searchParams.append('page', params.page.toString());
+    if (params.limit) searchParams.append('limit', params.limit.toString());
+    if (params.status) searchParams.append('status', params.status);
+    if (params.consentType) searchParams.append('consentType', params.consentType);
+    
+    const query = searchParams.toString();
+    const url = `/consents${query ? `?${query}` : ''}`;
+    
+    return this.request<any>(url, { method: 'GET' });
+  }
+
+  /**
+   * Get a specific consent request by ID
+   */
+  async getConsentById(id: string): Promise<ApiResponse<any>> {
+    return this.request<any>(`/consents/${id}`, { method: 'GET' });
+  }
+
+  /**
+   * Update consent status (approve/deny/revoke)
+   */
+  async updateConsentStatus(id: string, update: {
+    action: 'approved' | 'denied' | 'revoked';
+    reason?: string;
+  }): Promise<ApiResponse<any>> {
+    return this.request<any>(`/consents/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify(update)
+    });
+  }
+
+  /**
+   * Create a new consent request (for testing)
+   */
+  async createConsent(consentData: {
+    facilityName: string;
+    requestorName: string;
+    requestorEmail: string;
+    consentType: 'data_access' | 'subscription' | 'emergency_access' | 'research';
+    purpose: string;
+    permissionLevel: 'read' | 'write' | 'full_access';
+    dataTypes: string[];
+    validFrom?: string;
+    validTo?: string;
+  }): Promise<ApiResponse<any>> {
+    return this.request<any>('/consents', {
+      method: 'POST',
+      body: JSON.stringify(consentData)
+    });
   }
 
   /**

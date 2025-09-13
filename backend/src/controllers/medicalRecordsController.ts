@@ -360,6 +360,108 @@ export class MedicalRecordsController {
   }
 
   /**
+   * Get all medical records for the current authenticated user (patients only)
+   */
+  async getMyMedicalRecords(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const { page = 1, limit = 20, recordType, severity, status } = req.query;
+      const userId = req.user!.id;
+      const userRole = req.user!.role;
+
+      // Only patients can use this endpoint
+      if (userRole !== 'patient') {
+        res.status(403).json({
+          success: false,
+          message: 'Access denied: This endpoint is only available for patients'
+        });
+        return;
+      }
+
+      // Use Prisma directly to avoid JSON parsing issues
+      const { PrismaClient } = require('@prisma/client');
+      const prisma = new PrismaClient();
+
+      try {
+        // Get patient record for this user using Prisma
+        const patient = await prisma.patient.findFirst({
+          where: { userId: userId }
+        });
+
+        if (!patient) {
+          // Return empty records array instead of error for users without patient profiles
+          logger.info(`No patient record found for user ${userId}, returning empty records`);
+          await prisma.$disconnect();
+          res.json({
+            success: true,
+            message: 'No patient profile found. Medical records will appear here once your profile is completed.',
+            data: [],
+            meta: {
+              page: Number(page),
+              limit: Number(limit),
+              total: 0,
+              patientId: null,
+              requiresPatientProfile: true
+            }
+          });
+          return;
+        }
+
+        // Build filters
+        const whereClause: any = {
+          patientId: patient.id,
+          isActive: true
+        };
+
+        if (recordType) whereClause.recordType = recordType;
+        if (severity) whereClause.severity = severity;
+        if (status) whereClause.status = status;
+
+        // Get medical records using Prisma
+        const records = await prisma.medicalRecord.findMany({
+          where: whereClause,
+          orderBy: { visitDate: 'desc' },
+          skip: (Number(page) - 1) * Number(limit),
+          take: Number(limit)
+        });
+
+        await prisma.$disconnect();
+
+        logger.info(`Retrieved ${records.length} medical records for patient ${patient.id}`, {
+          userId,
+          patientId: patient.id,
+          recordType,
+          severity,
+          status
+        });
+
+        res.json({
+          success: true,
+          message: 'Medical records retrieved successfully',
+          data: records,
+          meta: {
+            page: Number(page),
+            limit: Number(limit),
+            total: records.length,
+            patientId: patient.id,
+            requiresPatientProfile: false
+          }
+        });
+
+      } catch (prismaError) {
+        await prisma.$disconnect();
+        throw prismaError;
+      }
+
+    } catch (error) {
+      logger.error('Failed to get user medical records:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve medical records'
+      });
+    }
+  }
+
+  /**
    * Get all medical records for a patient
    */
   async getPatientMedicalRecords(req: AuthenticatedRequest, res: Response): Promise<void> {

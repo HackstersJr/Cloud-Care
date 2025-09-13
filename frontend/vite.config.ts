@@ -8,9 +8,8 @@ export default defineConfig({
     host: true, // This exposes the server to the network
     port: 5174,
     proxy: {
-      // Proxy API requests to backend during development
-      '/api': {
-        target: 'http://localhost:3000',
+      '/api/v2': {
+        target: 'http://10.44.0.82:6644', // HCGateway API server
         changeOrigin: true,
         secure: false,
       },
@@ -18,10 +17,5 @@ export default defineConfig({
   },
   optimizeDeps: {
     exclude: ['lucide-react'],
-  },
-  // Environment variables configuration
-  define: {
-    // Make environment variables available at build time
-    __APP_VERSION__: JSON.stringify(process.env.npm_package_version),
   },
 });

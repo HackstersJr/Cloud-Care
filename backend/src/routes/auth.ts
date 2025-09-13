@@ -1,8 +1,10 @@
 import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
+import { v4 as uuidv4 } from 'uuid';
 import { authService } from '../services/auth';
 import { validateJWT, optionalJWT } from '../middleware/auth';
 import { loggers, logger } from '../utils/logger';
+import { prisma } from '../services/prisma';
 
 const router = Router();
 
@@ -525,28 +527,47 @@ router.post('/abha-login', async (req: Request, res: Response) => {
       }
     }
 
-    // For development/testing, create a mock user profile
-    const mockUser = {
-      userId: 'user-' + Date.now(),
-      email: method === 'email' ? value : `${value.replace(/[^a-zA-Z0-9]/g, '')}@abha.gov.in`,
-      firstName: 'ABHA',
-      lastName: 'User',
-      role: 'patient',
-      phone: method === 'mobile' ? value : '+91' + Math.floor(Math.random() * 10000000000),
-      abhaId: value.includes('@') ? value : `abha-${Date.now()}`,
-      healthId: value.includes('@') ? value : `healthid-${Date.now()}`,
-      isVerified: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
+    // For development/testing, try to find existing user first
+    const email = method === 'email' ? value : `${value.replace(/[^a-zA-Z0-9]/g, '')}@abha.gov.in`;
+    
+    let existingUser;
+    try {
+      existingUser = await prisma.user.findUnique({
+        where: { email: email }
+      });
+    } catch (dbError) {
+      console.warn('Database lookup failed, proceeding with mock user');
+    }
 
-    // Generate real JWT tokens for development
+    let user;
+    if (existingUser) {
+      // Use existing user
+      user = existingUser;
+      logger.info(`ABHA login - Found existing user: ${user.id}`);
+    } else {
+      // Create mock user profile for development
+      user = {
+        id: uuidv4(), // Generate proper UUID
+        email: email,
+        firstName: 'ABHA',
+        lastName: 'User',
+        role: 'patient',
+        phoneNumber: method === 'mobile' ? value : '+91' + Math.floor(Math.random() * 10000000000),
+        abhaId: value.includes('@') ? value : `abha-${Date.now()}`,
+        healthId: value.includes('@') ? value : `healthid-${Date.now()}`,
+        isEmailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      logger.info(`ABHA login - Created mock user: ${user.id}`);
+    }
+
+    // Generate JWT tokens with consistent structure
     const tokenPayload = {
-      id: mockUser.userId,
-      email: mockUser.email,
-      role: mockUser.role,
-      abhaId: mockUser.abhaId,
-      permissions: ['patient:read', 'patient:write'],
+      userId: user.id,  // Use consistent field name
+      email: user.email,
+      role: user.role,
+      sessionId: uuidv4(),  // Add session ID like standard login
       isVerified: true
     };
 
@@ -557,7 +578,7 @@ router.post('/abha-login', async (req: Request, res: Response) => {
     );
 
     const refreshToken = jwt.sign(
-      { id: mockUser.userId, type: 'refresh' },
+      { userId: user.id, sessionId: tokenPayload.sessionId, type: 'refresh' },
       process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-key',
       { expiresIn: '7d' }
     );
@@ -568,13 +589,13 @@ router.post('/abha-login', async (req: Request, res: Response) => {
       expiresIn: 24 * 60 * 60 // 24 hours in seconds
     };
 
-    logger.info(`ABHA login successful - Method: ${method}, Value: ${value}, User: ${mockUser.userId}`);
+    logger.info(`ABHA login successful - Method: ${method}, Value: ${value}, User: ${user.id}`);
 
     return res.status(200).json({
       status: 'success',
       message: 'ABHA login successful',
       data: {
-        user: mockUser,
+        user: user,
         tokens: tokens
       },
       timestamp: new Date().toISOString()
@@ -648,7 +669,7 @@ router.post('/doctor-login', async (req: Request, res: Response) => {
 
     // Create mock doctor user
     const mockDoctor = {
-      userId: 'doctor-' + Date.now(),
+      userId: uuidv4(), // Generate proper UUID
       email: facilityData.email,
       firstName: facilityData.name.split(' ')[1] || 'Doctor',
       lastName: facilityData.name.split(' ').slice(2).join(' ') || 'User',
@@ -708,6 +729,55 @@ router.post('/doctor-login', async (req: Request, res: Response) => {
         statusCode: 500,
         code: 'DOCTOR_LOGIN_FAILED',
         message: 'Doctor login failed',
+        timestamp: new Date().toISOString()
+      }
+    });
+  }
+});
+
+// Get user profile endpoint
+router.get('/profile', validateJWT, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    
+    if (!user) {
+      return res.status(401).json({
+        error: {
+          status: 'error',
+          statusCode: 401,
+          code: 'UNAUTHORIZED',
+          message: 'User not authenticated',
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+
+    // Return user profile data
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        id: user.id || user.userId,
+        email: user.email,
+        firstName: user.firstName || 'User',
+        lastName: user.lastName || '',
+        role: user.role,
+        phone: user.phone || '',
+        abhaId: user.abhaId || '',
+        facilityId: user.facilityId || null,
+        isVerified: user.isVerified || false,
+        createdAt: user.createdAt || new Date().toISOString(),
+        updatedAt: user.updatedAt || new Date().toISOString()
+      },
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error: any) {
+    return res.status(500).json({
+      error: {
+        status: 'error',
+        statusCode: 500,
+        code: 'PROFILE_FETCH_FAILED',
+        message: 'Failed to fetch user profile',
         timestamp: new Date().toISOString()
       }
     });

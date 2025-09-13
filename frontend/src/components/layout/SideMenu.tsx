@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   X, Shield, Clock, Languages, Share2, HelpCircle, 
   FileText, Handshake, Settings, Info, MessageCircle, 
-  LogOut, Smartphone 
+  LogOut, Smartphone, Home, Link 
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -17,6 +17,8 @@ const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
   const { logout } = useAuth();
   
   const menuItems = [
+    { icon: Home, label: 'Dashboard', action: () => { navigate('/dashboard'); onClose(); } },
+    { icon: Link, label: 'Linked Facilities', action: () => { navigate('/facilities'); onClose(); } },
     { icon: Shield, label: 'Health locker', action: () => {} },
     { icon: Clock, label: 'Token history', action: () => {} },
     { icon: Languages, label: 'Language change', action: () => {} },
@@ -49,7 +51,7 @@ const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
               <div className="w-8 h-8 bg-orange-500 rounded-lg mr-3"></div>
               <span className="font-semibold">Menu</span>
             </div>
-            <button onClick={onClose} className="text-white">
+            <button onClick={onClose} className="text-white" title="Close menu">
               <X className="w-6 h-6" />
             </button>
           </div>

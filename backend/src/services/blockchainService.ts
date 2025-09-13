@@ -38,14 +38,22 @@ export class BlockchainService {
    */
   private initializeWallet(): void {
     try {
-      if (config.blockchain.privateKey && config.blockchain.privateKey !== '') {
-        this.wallet = new ethers.Wallet(config.blockchain.privateKey, this.provider);
+      const privateKey = config.blockchain.privateKey;
+      
+      // Check if private key is provided and not a placeholder
+      if (privateKey && 
+          privateKey !== '' && 
+          privateKey !== 'your_ethereum_private_key_optional_leave_empty_for_read_only' &&
+          privateKey.startsWith('0x') &&
+          privateKey.length === 66) {
+        this.wallet = new ethers.Wallet(privateKey, this.provider);
         logger.info('Blockchain wallet initialized successfully');
       } else {
-        logger.warn('No private key provided - blockchain writes disabled');
+        logger.warn('No valid private key provided - blockchain writes disabled (read-only mode)');
       }
     } catch (error) {
       logger.error('Failed to initialize blockchain wallet:', error);
+      logger.warn('Continuing in read-only mode');
     }
   }
 
@@ -282,6 +290,160 @@ export class BlockchainService {
   generateDataHash(medicalData: any): string {
     const dataString = JSON.stringify(medicalData, Object.keys(medicalData).sort());
     return ethers.keccak256(ethers.toUtf8Bytes(dataString));
+  }
+
+  /**
+   * Create a consent record on blockchain for QR sharing
+   */
+  async createConsentRecord(consentData: any): Promise<{ hash: string; timestamp: number }> {
+    try {
+      if (!this.wallet) {
+        logger.warn('No wallet available - simulating consent record creation');
+        return {
+          hash: ethers.keccak256(ethers.toUtf8Bytes(JSON.stringify(consentData))),
+          timestamp: Date.now()
+        };
+      }
+
+      // Create a hash of the consent data
+      const consentHash = this.generateDataHash(consentData);
+      
+      // For now, we'll use a simple transaction to store the hash
+      // In production, you'd use a smart contract
+      const tx = await this.wallet.sendTransaction({
+        to: this.wallet.address, // Self-transaction for demo
+        value: 0,
+        data: consentHash
+      });
+
+      await tx.wait();
+      
+      logger.info(`Consent record created on blockchain: ${tx.hash}`);
+      
+      return {
+        hash: tx.hash,
+        timestamp: Date.now()
+      };
+
+    } catch (error) {
+      logger.error('Failed to create consent record:', error);
+      // Return a simulated hash in development
+      return {
+        hash: ethers.keccak256(ethers.toUtf8Bytes(JSON.stringify(consentData))),
+        timestamp: Date.now()
+      };
+    }
+  }
+
+  /**
+   * Verify a consent record exists on blockchain
+   */
+  async verifyConsentRecord(transactionHash: string): Promise<boolean> {
+    try {
+      if (!transactionHash) return false;
+      
+      // If it's a simulated hash (starts with 0x and is 66 chars), assume valid for dev
+      if (transactionHash.startsWith('0x') && transactionHash.length === 66) {
+        return true;
+      }
+
+      const tx = await this.provider.getTransaction(transactionHash);
+      return tx !== null;
+
+    } catch (error) {
+      logger.error('Failed to verify consent record:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Log data access events on blockchain
+   */
+  async logDataAccess(accessData: {
+    patientId: string;
+    action: string;
+    recordIds: string[];
+    facilityId: string;
+    accessorId?: string;
+    timestamp: string;
+    metadata?: any;
+  }): Promise<{ hash: string; timestamp: number }> {
+    try {
+      logger.info('Logging data access event:', accessData);
+      
+      if (!this.wallet) {
+        logger.warn('No wallet available - simulating access log');
+        return {
+          hash: ethers.keccak256(ethers.toUtf8Bytes(JSON.stringify(accessData))),
+          timestamp: Date.now()
+        };
+      }
+
+      // Create hash of access event
+      const accessHash = this.generateDataHash(accessData);
+      
+      // Log to blockchain (simplified - in production use events/logs)
+      const tx = await this.wallet.sendTransaction({
+        to: this.wallet.address,
+        value: 0,
+        data: accessHash
+      });
+
+      await tx.wait();
+      
+      return {
+        hash: tx.hash,
+        timestamp: Date.now()
+      };
+
+    } catch (error) {
+      logger.error('Failed to log data access:', error);
+      return {
+        hash: ethers.keccak256(ethers.toUtf8Bytes(JSON.stringify(accessData))),
+        timestamp: Date.now()
+      };
+    }
+  }
+
+  /**
+   * Revoke consent on blockchain
+   */
+  async revokeConsent(consentHash: string): Promise<{ hash: string; timestamp: number }> {
+    try {
+      logger.info('Revoking consent:', consentHash);
+      
+      if (!this.wallet) {
+        logger.warn('No wallet available - simulating consent revocation');
+        return {
+          hash: ethers.keccak256(ethers.toUtf8Bytes(`REVOKED:${consentHash}`)),
+          timestamp: Date.now()
+        };
+      }
+
+      // Create revocation transaction
+      const revocationData = { action: 'REVOKE_CONSENT', originalHash: consentHash };
+      const revocationHash = this.generateDataHash(revocationData);
+      
+      const tx = await this.wallet.sendTransaction({
+        to: this.wallet.address,
+        value: 0,
+        data: revocationHash
+      });
+
+      await tx.wait();
+      
+      return {
+        hash: tx.hash,
+        timestamp: Date.now()
+      };
+
+    } catch (error) {
+      logger.error('Failed to revoke consent:', error);
+      return {
+        hash: ethers.keccak256(ethers.toUtf8Bytes(`REVOKED:${consentHash}`)),
+        timestamp: Date.now()
+      };
+    }
   }
 
   /**

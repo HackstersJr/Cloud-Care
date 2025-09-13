@@ -1,15 +1,16 @@
-import { useState } from 'react';
-import { Smartphone, Mail, CreditCard, MapPin, ArrowLeft, AlertTriangle } from 'lucide-react';
+import React, { useState } from 'react';
+import { Smartphone, Mail, CreditCard, MapPin, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { InlineLoading } from '../LoadingComponents';
+import { ABHALoginData } from '../../utils/api';
 
 const LoginPage = () => {
   const [selectedMethod, setSelectedMethod] = useState<string>('');
   const [formData, setFormData] = useState({ value: '', otp: '' });
   const [showOTP, setShowOTP] = useState(false);
-  const [sendingOTP, setSendingOTP] = useState(false);
-  const { loginABHA, sendOTP, verifyOTP, loading, error, clearError } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const { abhaLogin } = useAuth();
   const navigate = useNavigate();
 
   const handleBackToLanding = () => {
@@ -37,13 +38,6 @@ const LoginPage = () => {
       icon: CreditCard,
       color: 'bg-indigo-100',
       iconColor: 'text-indigo-600'
-    },
-    {
-      id: 'email',
-      title: 'Email Address',
-      icon: Mail,
-      color: 'bg-green-100',
-      iconColor: 'text-green-600'
     }
   ];
 
@@ -51,75 +45,52 @@ const LoginPage = () => {
     setSelectedMethod(methodId);
     setShowOTP(false);
     setFormData({ value: '', otp: '' });
-    clearError();
   };
 
   const handleSendOTP = async () => {
-    if (!formData.value) return;
-    
-    try {
-      setSendingOTP(true);
-      clearError();
-      
-      const method = (selectedMethod === 'mobile' || selectedMethod === 'email') 
-        ? selectedMethod as 'mobile' | 'email'
-        : 'mobile'; // Default for ABHA methods
-      
-      const success = await sendOTP(method, formData.value);
-      if (success) {
+    if (formData.value) {
+      setLoading(true);
+      setError('');
+      try {
+        // In a real app, you would call an API to send OTP
+        // For now, we'll just show the OTP field
         setShowOTP(true);
+      } catch (err) {
+        setError('Failed to send OTP. Please try again.');
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error('Failed to send OTP:', err);
-    } finally {
-      setSendingOTP(false);
     }
   };
 
-  const handleVerifyOTP = async () => {
-    if (!formData.otp) return;
-    
-    try {
-      clearError();
-      
-      const method = (selectedMethod === 'mobile' || selectedMethod === 'email') 
-        ? selectedMethod as 'mobile' | 'email'
-        : 'mobile'; // Default for ABHA methods
-      
-      const verified = await verifyOTP(method, formData.value, formData.otp);
-      
-      if (verified) {
-        // If OTP is verified, proceed with ABHA login
-        const success = await loginABHA({
-          method: selectedMethod as 'mobile' | 'abha-address' | 'abha-number' | 'email',
+  const handleLogin = async () => {
+    if (formData.otp && formData.value) {
+      setLoading(true);
+      setError('');
+      try {
+        const loginData: ABHALoginData = {
+          method: selectedMethod as 'mobile' | 'email' | 'abha-address' | 'abha-number',
           value: formData.value,
           otp: formData.otp
-        });
+        };
         
-        if (success) {
-          navigate('/');
-        }
+        await abhaLogin(loginData);
+        navigate('/dashboard');
+      } catch (err) {
+        setError('Login failed. Please check your credentials and try again.');
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error('Failed to verify OTP or login:', err);
     }
   };
 
   const getPlaceholder = () => {
     switch (selectedMethod) {
-      case 'mobile': return 'Enter mobile number (+91XXXXXXXXXX)';
-      case 'abha-address': return 'Enter ABHA address (name@abha)';
-      case 'abha-number': return 'Enter ABHA number (XX-XXXX-XXXX-XXXX)';
+      case 'mobile': return 'Enter mobile number';
+      case 'abha-address': return 'Enter ABHA address';
+      case 'abha-number': return 'Enter ABHA number';
       case 'email': return 'Enter email address';
       default: return '';
-    }
-  };
-
-  const getInputType = () => {
-    switch (selectedMethod) {
-      case 'mobile': return 'tel';
-      case 'email': return 'email';
-      default: return 'text';
     }
   };
 
@@ -131,27 +102,10 @@ const LoginPage = () => {
           <button
             onClick={handleBackToLanding}
             className="absolute top-4 left-4 flex items-center space-x-2 text-gray-600 hover:text-gray-800 transition-colors group"
-            disabled={loading || sendingOTP}
           >
             <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
             <span className="text-sm font-medium">Back</span>
           </button>
-
-          {/* Error Display */}
-          {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-              <div className="flex items-center">
-                <AlertTriangle className="w-5 h-5 text-red-600 mr-2" />
-                <span className="text-red-800 text-sm">{error}</span>
-                <button
-                  onClick={clearError}
-                  className="ml-auto text-red-600 hover:text-red-800"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-          )}
 
           <div className="text-center mb-8 mt-8">
             <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -162,31 +116,33 @@ const LoginPage = () => {
           </div>
 
           <div className="space-y-6">
+            {error && (
+              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg">
+                {error}
+              </div>
+            )}
+            
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 {loginMethods.find(m => m.id === selectedMethod)?.title}
               </label>
               <input
-                type={getInputType()}
+                type="text"
                 value={formData.value}
                 onChange={(e) => setFormData(prev => ({ ...prev, value: e.target.value }))}
                 placeholder={getPlaceholder()}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                disabled={loading || sendingOTP}
+                disabled={loading}
               />
             </div>
 
             {!showOTP ? (
               <button
                 onClick={handleSendOTP}
-                disabled={!formData.value || sendingOTP}
-                className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 transition-colors flex items-center justify-center"
+                disabled={!formData.value || loading}
+                className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
               >
-                {sendingOTP ? (
-                  <InlineLoading text="Sending OTP..." size="sm" color="gray" />
-                ) : (
-                  'Send OTP'
-                )}
+                {loading ? 'Sending...' : 'Send OTP'}
               </button>
             ) : (
               <>
@@ -197,50 +153,29 @@ const LoginPage = () => {
                   <input
                     type="text"
                     value={formData.otp}
-                    onChange={(e) => setFormData(prev => ({ ...prev, otp: e.target.value.replace(/\D/g, '') }))}
+                    onChange={(e) => setFormData(prev => ({ ...prev, otp: e.target.value }))}
                     placeholder="Enter 6-digit OTP"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-lg tracking-widest"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     maxLength={6}
                     disabled={loading}
                   />
-                  <p className="text-xs text-gray-500 mt-2">
-                    OTP sent to {formData.value}
-                  </p>
                 </div>
-
-                <div className="space-y-3">
-                  <button
-                    onClick={handleVerifyOTP}
-                    disabled={formData.otp.length !== 6 || loading}
-                    className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 transition-colors flex items-center justify-center"
-                  >
-                    {loading ? (
-                      <InlineLoading text="Verifying..." size="sm" color="gray" />
-                    ) : (
-                      'Verify & Login'
-                    )}
-                  </button>
-
-                  <button
-                    onClick={handleSendOTP}
-                    disabled={sendingOTP || loading}
-                    className="w-full text-blue-600 py-2 px-4 text-sm font-medium hover:text-blue-700 transition-colors"
-                  >
-                    {sendingOTP ? 'Resending...' : 'Resend OTP'}
-                  </button>
-                </div>
+                <button
+                  onClick={handleLogin}
+                  disabled={formData.otp.length !== 6 || loading}
+                  className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
+                >
+                  {loading ? 'Verifying...' : 'Verify & Login'}
+                </button>
               </>
             )}
 
-            <div className="text-center">
-              <button
-                onClick={() => handleMethodSelect('')}
-                className="text-sm text-gray-600 hover:text-gray-800 transition-colors"
-                disabled={loading || sendingOTP}
-              >
-                Choose different method
-              </button>
-            </div>
+            <button
+              onClick={() => setSelectedMethod('')}
+              className="w-full text-blue-600 py-2 px-4 rounded-lg font-medium hover:bg-blue-50 transition-colors"
+            >
+              Back to login methods
+            </button>
           </div>
         </div>
       </div>
@@ -259,22 +194,6 @@ const LoginPage = () => {
           <span className="text-sm font-medium">Back</span>
         </button>
 
-        {/* Error Display */}
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <div className="flex items-center">
-              <AlertTriangle className="w-5 h-5 text-red-600 mr-2" />
-              <span className="text-red-800 text-sm">{error}</span>
-              <button
-                onClick={clearError}
-                className="ml-auto text-red-600 hover:text-red-800"
-              >
-                ×
-              </button>
-            </div>
-          </div>
-        )}
-
         <div className="text-center mb-8 mt-8">
           <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
             <div className="w-8 h-8 bg-orange-500 rounded-full"></div>
@@ -283,37 +202,40 @@ const LoginPage = () => {
           <p className="text-gray-600">Choose your login method</p>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-4 mb-8">
           {loginMethods.map((method) => (
             <button
               key={method.id}
               onClick={() => handleMethodSelect(method.id)}
-              className="w-full p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-colors text-left"
-              disabled={loading}
+              className="w-full flex items-center p-4 border-2 border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all"
             >
-              <div className="flex items-center">
-                <div className={`w-12 h-12 rounded-lg ${method.color} flex items-center justify-center`}>
-                  <method.icon className={`w-6 h-6 ${method.iconColor}`} />
-                </div>
-                <div className="ml-4">
-                  <h3 className="font-medium text-gray-900">{method.title}</h3>
-                  <p className="text-sm text-gray-600">
-                    {method.id === 'mobile' && 'Login with your mobile number'}
-                    {method.id === 'abha-address' && 'Use your ABHA address'}
-                    {method.id === 'abha-number' && 'Use your ABHA number'}
-                    {method.id === 'email' && 'Login with your email address'}
-                  </p>
-                </div>
+              <div className={`w-12 h-12 rounded-full ${method.color} flex items-center justify-center mr-4`}>
+                <method.icon className={`w-6 h-6 ${method.iconColor}`} />
               </div>
+              <span className="font-medium text-gray-900">{method.title}</span>
             </button>
           ))}
         </div>
 
+        <div className="border-t pt-6">
+          <p className="text-sm text-gray-600 text-center mb-4">Other Login Method</p>
+          <button
+            onClick={() => handleMethodSelect('email')}
+            className="w-full flex items-center p-4 border-2 border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all"
+          >
+            <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center mr-4">
+              <Mail className="w-6 h-6 text-orange-600" />
+            </div>
+            <span className="font-medium text-gray-900">Email</span>
+          </button>
+        </div>
+
         <div className="mt-8 text-center">
-          <p className="text-sm text-gray-600">
-            Secure access powered by{' '}
-            <span className="font-medium text-blue-600">ABHA</span>
-          </p>
+          <p className="text-sm text-gray-600 mb-2">Don't have an ABHA number?</p>
+          <button className="text-orange-600 font-medium hover:underline">Create now</button>
+          
+          <p className="text-sm text-gray-600 mt-4 mb-2">Don't have an ABHA address?</p>
+          <button className="text-orange-600 font-medium hover:underline">Register</button>
         </div>
       </div>
     </div>

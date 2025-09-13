@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: cloudcare_dev_password
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     ports:
-      - "5432:5432"
+      - "192.168.137.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init:/docker-entrypoint-initdb.d
@@ -27,7 +27,7 @@ services:
     image: redis:7-alpine
     container_name: cloudcare-redis
     ports:
-      - "6379:6379"
+      - "192.168.137.1:6379:6379"
     volumes:
       - redis_data:/data
     networks:
@@ -58,11 +58,12 @@ services:
       DB_NAME: cloudcare_db
       DB_USER: postgres
       DB_PASSWORD: cloudcare_dev_password
+      DATABASE_URL: postgresql://postgres:cloudcare_dev_password@postgres:5432/cloudcare_db
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: cloudcare_redis_password
     ports:
-      - "3000:3000"
+      - "192.168.137.1:3000:3000"
     volumes:
       - ./logs:/app/logs
       - ./uploads:/app/uploads
@@ -94,6 +95,7 @@ services:
       DB_NAME: cloudcare_db
       DB_USER: postgres
       DB_PASSWORD: cloudcare_dev_password
+      DATABASE_URL: postgresql://postgres:cloudcare_dev_password@postgres:5432/cloudcare_db
     networks:
       - cloudcare-network
     depends_on:

@@ -1,32 +1,59 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Eye, EyeOff, RefreshCw, Volume2 } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import { DoctorLoginData } from '../../utils/api';
 
 interface DoctorLoginPageProps {
-  onLogin: () => void;
   onBack: () => void;
   onAbhaLogin?: () => void;
 }
 
-const DoctorLoginPage = ({ onLogin, onBack, onAbhaLogin }: DoctorLoginPageProps) => {
+const DoctorLoginPage = ({ onBack, onAbhaLogin }: DoctorLoginPageProps) => {
   const [formData, setFormData] = useState({
     facilityId: '',
     password: '',
     captcha: ''
   });
   const [showPassword, setShowPassword] = useState(false);
-  const [captchaText, setCaptchaText] = useState('doctor123');
+  const [captchaText, setCaptchaText] = useState('Ax5=?');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  
+  const { doctorLogin } = useAuth();
+  const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Basic validation
+    
     if (formData.facilityId && formData.password && formData.captcha) {
-      onLogin();
+      setLoading(true);
+      setError('');
+      
+      try {
+        const loginData: DoctorLoginData = {
+          facilityId: formData.facilityId,
+          password: formData.password,
+          captcha: formData.captcha
+        };
+        
+        await doctorLogin(loginData);
+        navigate('/doctor-dashboard');
+      } catch (err) {
+        setError('Login failed. Please check your credentials and try again.');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
   const refreshCaptcha = () => {
-    // For development, always use 'doctor123' as captcha
-    setCaptchaText('doctor123');
+    // Generate a simple math captcha
+    const operations = ['+', '-', '×'];
+    const operation = operations[Math.floor(Math.random() * operations.length)];
+    const num1 = Math.floor(Math.random() * 10) + 1;
+    const num2 = Math.floor(Math.random() * 10) + 1;
+    setCaptchaText(`${num1}${operation}${num2}=?`);
   };
 
   const handleInputChange = (field: string, value: string) => {
@@ -48,23 +75,20 @@ const DoctorLoginPage = ({ onLogin, onBack, onAbhaLogin }: DoctorLoginPageProps)
                 <span className="text-sm font-medium">Back</span>
               </button>
               <div className="flex items-center space-x-4">
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center">
                   <img
-                    src="https://images.pexels.com/photos/40568/medical-appointment-doctor-healthcare-40568.jpeg?auto=compress&cs=tinysrgb&w=32&h=32&fit=crop"
+                    src="/symbol1.svg"
                     alt="National Health Authority"
-                    className="w-8 h-8 rounded"
+                    className="h-10 w-auto"
                   />
-                  <div className="text-sm">
-                    <div className="font-semibold text-gray-900">National Health</div>
-                    <div className="text-gray-600">Authority</div>
-                  </div>
                 </div>
-                <div className="h-8 w-px bg-gray-300"></div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
-                    <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-                  </div>
-                  <span className="text-sm font-medium text-gray-900">Digital India</span>
+                <div className="h-10 w-px bg-gray-300 mx-3"></div>
+                <div className="flex items-center">
+                  <img
+                    src="/symbol2.svg"
+                    alt="ABDM Digital Mission"
+                    className="h-9 w-auto"
+                  />
                 </div>
               </div>
             </div>
@@ -111,19 +135,15 @@ const DoctorLoginPage = ({ onLogin, onBack, onAbhaLogin }: DoctorLoginPageProps)
           <div className="text-center mb-8">
             <h1 className="text-2xl font-bold text-gray-900 mb-2">Doctor Login</h1>
             <p className="text-gray-600">Access your doctor dashboard</p>
-            
-            {/* Development Test Credentials */}
-            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-left">
-              <h3 className="text-sm font-semibold text-blue-800 mb-2">Test Credentials:</h3>
-              <div className="text-xs text-blue-700 space-y-1">
-                <p><strong>Facility ID:</strong> HOSP001, HOSP002, CLINIC001, or TEST001</p>
-                <p><strong>Password:</strong> doctor123</p>
-                <p><strong>Captcha:</strong> doctor123</p>
-              </div>
-            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {error && (
+              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg">
+                {error}
+              </div>
+            )}
+            
             {/* Facility ID */}
             <div>
               <label htmlFor="facilityId" className="block text-sm font-medium text-gray-700 mb-2">
@@ -136,6 +156,7 @@ const DoctorLoginPage = ({ onLogin, onBack, onAbhaLogin }: DoctorLoginPageProps)
                 onChange={(e) => handleInputChange('facilityId', e.target.value)}
                 placeholder="Enter facility Id"
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                disabled={loading}
                 required
               />
             </div>
@@ -153,12 +174,14 @@ const DoctorLoginPage = ({ onLogin, onBack, onAbhaLogin }: DoctorLoginPageProps)
                   onChange={(e) => handleInputChange('password', e.target.value)}
                   placeholder="Enter password"
                   className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                  disabled={loading}
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
+                  disabled={loading}
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
@@ -180,6 +203,7 @@ const DoctorLoginPage = ({ onLogin, onBack, onAbhaLogin }: DoctorLoginPageProps)
                     onClick={refreshCaptcha}
                     className="p-2 text-gray-500 hover:text-gray-700 transition-colors"
                     title="Refresh captcha"
+                    disabled={loading}
                   >
                     <RefreshCw className="w-5 h-5" />
                   </button>
@@ -187,6 +211,7 @@ const DoctorLoginPage = ({ onLogin, onBack, onAbhaLogin }: DoctorLoginPageProps)
                     type="button"
                     className="p-2 text-gray-500 hover:text-gray-700 transition-colors"
                     title="Audio captcha"
+                    disabled={loading}
                   >
                     <Volume2 className="w-5 h-5" />
                   </button>
@@ -199,6 +224,7 @@ const DoctorLoginPage = ({ onLogin, onBack, onAbhaLogin }: DoctorLoginPageProps)
                 onChange={(e) => handleInputChange('captcha', e.target.value)}
                 placeholder="Enter answer"
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                disabled={loading}
                 required
               />
             </div>
@@ -206,9 +232,10 @@ const DoctorLoginPage = ({ onLogin, onBack, onAbhaLogin }: DoctorLoginPageProps)
             {/* Login Button */}
             <button
               type="submit"
-              className="w-full bg-orange-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-orange-700 transition-colors"
+              disabled={loading}
+              className="w-full bg-orange-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-orange-700 disabled:bg-gray-400 transition-colors"
             >
-              Login
+              {loading ? 'Logging in...' : 'Login'}
             </button>
           </form>
 

@@ -1,8 +1,9 @@
-import { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import LandingPage from './components/LandingPage';
-import DoctorDashboard from './components/DoctorDashboard';
+import DoctorDashboard from './components/dashboard/DoctorDashboard';
 import LoginPage from './components/auth/LoginPage';
+import StandardLoginPage from './components/auth/StandardLoginPage';
+import RegisterPage from './components/auth/RegisterPage';
 import DoctorLoginPage from './components/auth/DoctorLoginPage';
 import Dashboard from './components/Dashboard';
 import LinkedFacilities from './components/LinkedFacilities';
@@ -11,83 +12,187 @@ import MyRecords from './components/MyRecords';
 import ScanShare from './components/ScanShare';
 import Wearables from './components/Wearables';
 import Settings from './components/Settings';
+import Profile from './components/Profile';
+import PatientDataLanding from './components/PatientDataLanding';
+import PatientRecordsView from './components/PatientRecordsView';
+import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { MedicalRecordsProvider } from './contexts/MedicalRecordsContext';
-import ErrorBoundary from './components/ErrorBoundary';
 
 export type UserType = 'abha' | 'doctor' | null;
 
 // Main App Routes Component
 function AppRoutes() {
-  const { isAuthenticated } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
-  const [showDoctorDashboard, setShowDoctorDashboard] = useState(false);
-  const [showDoctorLogin, setShowDoctorLogin] = useState(false);
 
   const handleLogin = (userType: UserType) => {
     if (userType === 'doctor') {
-      setShowDoctorLogin(true);
+      navigate('/doctor-login');
+    } else {
+      navigate('/abha-login');
     }
   };
 
-  const handleDoctorLoginSuccess = () => {
-    setShowDoctorLogin(false);
-    setShowDoctorDashboard(true);
-  };
-
   const handleBackToLanding = () => {
-    setShowDoctorLogin(false);
+    navigate('/');
   };
-
-  const handleAbhaLoginFromDoctor = () => {
-    setShowDoctorLogin(false);
-    // Navigate to ABHA login page
-    navigate('/login');
-  };
-
-  const handleLogout = () => {
-    setShowDoctorDashboard(false);
-    setShowDoctorLogin(false);
-  };
-
-  // If user is authenticated (ABHA user), show the PWA routes
-  if (isAuthenticated) {
-    return (
-      <MedicalRecordsProvider>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/facilities" element={<LinkedFacilities />} />
-          <Route path="/consents" element={<Consents />} />
-          <Route path="/records" element={<MyRecords />} />
-          <Route path="/scan" element={<ScanShare />} />
-          <Route path="/wearables" element={<Wearables />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </MedicalRecordsProvider>
-    );
-  }
-
-  // If doctor login page should be shown
-  if (showDoctorLogin) {
-    return (
-      <DoctorLoginPage
-        onLogin={handleDoctorLoginSuccess}
-        onBack={handleBackToLanding}
-        onAbhaLogin={handleAbhaLoginFromDoctor}
-      />
-    );
-  }
-
-  // If doctor is logged in, show doctor dashboard
-  if (showDoctorDashboard) {
-    return <DoctorDashboard onLogout={handleLogout} />;
-  }
 
   return (
     <Routes>
-      <Route path="/" element={<LandingPage onLogin={handleLogin} />} />
-      <Route path="/login" element={<LoginPage />} />
+      {/* Public Routes */}
+      <Route 
+        path="/" 
+        element={
+          <ProtectedRoute requireAuth={false}>
+            <LandingPage onLogin={handleLogin} />
+          </ProtectedRoute>
+        } 
+      />
+      
+      {/* Authentication Routes */}
+      <Route 
+        path="/login" 
+        element={
+          <ProtectedRoute requireAuth={false}>
+            <StandardLoginPage onBack={handleBackToLanding} />
+          </ProtectedRoute>
+        } 
+      />
+      
+      <Route 
+        path="/register" 
+        element={
+          <ProtectedRoute requireAuth={false}>
+            <RegisterPage onBack={handleBackToLanding} />
+          </ProtectedRoute>
+        } 
+      />
+      
+      <Route 
+        path="/abha-login" 
+        element={
+          <ProtectedRoute requireAuth={false}>
+            <LoginPage />
+          </ProtectedRoute>
+        } 
+      />
+      
+      <Route 
+        path="/doctor-login" 
+        element={
+          <ProtectedRoute requireAuth={false}>
+            <DoctorLoginPage 
+              onBack={handleBackToLanding} 
+              onAbhaLogin={() => navigate('/abha-login')}
+            />
+          </ProtectedRoute>
+        } 
+      />
+
+      {/* Protected Patient Routes */}
+      <Route 
+        path="/dashboard" 
+        element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        } 
+      />
+      
+      <Route 
+        path="/facilities" 
+        element={
+          <ProtectedRoute>
+            <LinkedFacilities />
+          </ProtectedRoute>
+        } 
+      />
+      
+      <Route 
+        path="/consents" 
+        element={
+          <ProtectedRoute>
+            <Consents />
+          </ProtectedRoute>
+        } 
+      />
+      
+      <Route 
+        path="/records" 
+        element={
+          <ProtectedRoute>
+            <MyRecords />
+          </ProtectedRoute>
+        } 
+      />
+      
+      <Route 
+        path="/scan" 
+        element={
+          <ProtectedRoute>
+            <ScanShare />
+          </ProtectedRoute>
+        } 
+      />
+      
+      <Route 
+        path="/wearables" 
+        element={
+          <ProtectedRoute>
+            <Wearables />
+          </ProtectedRoute>
+        } 
+      />
+      
+      <Route 
+        path="/settings" 
+        element={
+          <ProtectedRoute>
+            <Settings />
+          </ProtectedRoute>
+        } 
+      />
+      
+      <Route 
+        path="/profile" 
+        element={
+          <ProtectedRoute>
+            <Profile />
+          </ProtectedRoute>
+        } 
+      />
+
+      {/* Protected Doctor Routes */}
+      <Route 
+        path="/doctor-dashboard" 
+        element={
+          <ProtectedRoute>
+            {user?.role === 'doctor' ? (
+              <DoctorDashboard />
+            ) : (
+              <Navigate to="/dashboard" replace />
+            )}
+          </ProtectedRoute>
+        } 
+      />
+
+      <Route 
+        path="/patient-records" 
+        element={
+          <ProtectedRoute>
+            {user?.role === 'doctor' ? (
+              <PatientRecordsView />
+            ) : (
+              <Navigate to="/dashboard" replace />
+            )}
+          </ProtectedRoute>
+        } 
+      />
+
+      {/* Public Patient Data Access */}
+      <Route path="/patient-data" element={<PatientDataLanding />} />
+
+      {/* Fallback Route */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
@@ -95,15 +200,13 @@ function AppRoutes() {
 
 function App() {
   return (
-    <ErrorBoundary>
-      <AuthProvider>
-        <Router>
-          <div className="min-h-screen bg-gray-50">
-            <AppRoutes />
-          </div>
-        </Router>
-      </AuthProvider>
-    </ErrorBoundary>
+    <AuthProvider>
+      <Router>
+        <div className="min-h-screen bg-gray-50">
+          <AppRoutes />
+        </div>
+      </Router>
+    </AuthProvider>
   );
 }
 

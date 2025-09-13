@@ -89,6 +89,7 @@ export interface MedicalRecord extends BaseEntity {
   patientId: string;
   doctorId?: string | undefined;
   recordType: 'consultation' | 'prescription' | 'lab_report' | 'imaging' | 'surgery' | 'vaccination' | 'allergy' | 'other';
+  category?: 'emergency' | 'critical' | 'routine' | 'preventive' | undefined;
   title: string;
   description: string;
   diagnosis?: string[] | undefined;
@@ -97,6 +98,9 @@ export interface MedicalRecord extends BaseEntity {
   labResults?: LabResult[] | undefined;
   imagingResults?: ImagingResult[] | undefined;
   notes: string;
+  data?: any; // Additional record data
+  tags?: string[]; // Tags for categorization
+  attachments?: MedicalFile[]; // File attachments
   visitDate: Date;
   followUpRequired: boolean;
   followUpDate?: Date | undefined;
@@ -297,6 +301,36 @@ export interface Notification extends BaseEntity {
   actionUrl?: string;
   expiresAt?: Date;
   metadata?: Record<string, any>;
+}
+
+// QR code sharing tokens
+export interface QRShareToken extends BaseEntity {
+  token: string;
+  user_id: string;
+  record_ids: string[];
+  facility_id?: string;
+  share_type: 'full' | 'summary' | 'emergency';
+  expires_at: Date;
+  access_count: number;
+  last_accessed?: Date;
+  revoked: boolean;
+  revoked_at?: Date;
+  blockchain_hash: string;
+}
+
+// Blockchain consent records
+export interface ConsentRecord extends BaseEntity {
+  patientId: string;
+  recordIds: string[];
+  facilityId?: string;
+  shareType: string;
+  token: string;
+  expiresAt: string;
+  permissions: {
+    read: boolean;
+    download: boolean;
+    timeAccess: string;
+  };
 }
 
 // System configuration
