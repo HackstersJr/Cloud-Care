@@ -4,6 +4,7 @@ import * as crypto from 'crypto';
 import QRCode from 'qrcode';
 import { prisma } from '../services/prisma';
 import { logger } from '../utils/logger';
+import { aiInsightsService, AIInsightRequest } from '../services/aiInsightsService';
 
 // Extend Request interface to include user
 interface AuthenticatedRequest extends Request {
@@ -270,16 +271,21 @@ export class QRController {
         }
       });
 
+      // Get family data for the patient
+      const familyData = await this.getFamilyDataForPatient(tokenData.user.patient.id);
+
       res.json({
         status: 'success',
         message: 'Medical records accessed successfully',
         data: {
           patient: {
+            id: tokenData.user.patient.id, // Add patient ID for AI insights
             name: `${tokenData.user.patient?.firstName} ${tokenData.user.patient?.lastName}`,
             dateOfBirth: tokenData.user.patient?.dateOfBirth,
             gender: tokenData.user.patient?.gender
           },
           records: sharedData,
+          familyData: familyData, // Add this line
           shareType: tokenData.shareType,
           recordCount: records.length,
           accessCount: tokenData.accessCount + 1,
@@ -298,6 +304,7 @@ export class QRController {
     }
   }
 
+  
   /**
    * Validate QR token without accessing data
    * POST /qr/validate
@@ -477,6 +484,310 @@ export class QRController {
         message: 'Failed to revoke QR token',
         error: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
+    }
+  }
+
+    /**
+   * Get family data for a patient to include in QR sharing
+   */
+  private async getFamilyDataForPatient(patientId: string) {
+    try {
+      // For now, return basic family info structure
+      // This will be enhanced once family relationships are properly set up
+      return {
+        familyGroups: [],
+        sharedMedicalHistory: [],
+        emergencyContacts: [],
+        hasFamilyData: false,
+        message: "Family data integration pending - will be available once family groups are configured"
+      };
+    } catch (error) {
+      logger.error('Error fetching family data:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Generate AI insights for doctor based on patient and family data
+   */
+  async generateAIInsights(req: Request, res: Response): Promise<void> {
+    try {
+      const { patientId, qrToken, consultationType = 'routine', symptoms, chiefComplaint } = req.body;
+
+      if (!patientId) {
+        res.status(400).json({
+          success: false,
+          message: 'Patient ID is required'
+        });
+        return;
+      }
+
+      // Validate that QR data was shared and doctor has access
+      let qrShareToken = null;
+      if (qrToken) {
+        qrShareToken = await prisma.qrShareToken.findUnique({
+          where: { token: qrToken },
+          include: {
+            user: {
+              include: {
+                patient: true
+              }
+            }
+          }
+        });
+
+        if (!qrShareToken || qrShareToken.revoked) {
+          res.status(404).json({
+            success: false,
+            message: 'QR token not found, expired, or revoked'
+          });
+          return;
+        }
+      }
+
+      // Get patient data with medical records
+      const patient = await prisma.patient.findUnique({
+        where: { id: patientId },
+        include: {
+          user: true,
+          medicalRecords: {
+            orderBy: { createdAt: 'desc' },
+            take: 10, // Latest 10 records
+            where: {
+              isActive: true
+            }
+          }
+        }
+      });
+
+      if (!patient) {
+        res.status(404).json({
+          success: false,
+          message: 'Patient not found'
+        });
+        return;
+      }
+
+      // Get family data
+      const familyData = await this.getFamilyDataForAI(patientId);
+
+      // Prepare patient data for AI
+      const patientData = {
+        name: `${patient.firstName} ${patient.lastName}`,
+        dateOfBirth: patient.dateOfBirth.toISOString(),
+        gender: patient.gender || 'unknown',
+        records: patient.medicalRecords.map((record: any) => ({
+          id: record.id,
+          title: record.title,
+          description: record.description || '',
+          recordType: record.recordType,
+          diagnosis: record.diagnosis?.join(', ') || '',
+          medications: record.medications?.map((med: any) => med.name || med.medication)?.join(', ') || '',
+          labResults: record.labResults?.map((lab: any) => `${lab.test}: ${lab.value}`)?.join(', ') || '',
+          notes: record.notes || '',
+          visitDate: record.visitDate.toISOString(),
+          severity: record.severity || 'unknown'
+        }))
+      };
+
+      // Generate AI insights
+      const insights = await aiInsightsService.generateMedicalInsights({
+        patientData,
+        familyData,
+        consultationType: consultationType as 'routine' | 'emergency' | 'follow_up' | 'initial',
+        symptoms: symptoms || [],
+        chiefComplaint: chiefComplaint || ''
+      });
+
+      res.json({
+        success: true,
+        data: {
+          insights,
+          patientId,
+          generatedAt: new Date().toISOString(),
+          dataSource: qrToken ? 'qr_shared' : 'direct_access'
+        }
+      });
+
+    } catch (error) {
+      logger.error('Error generating AI insights:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to generate AI insights'
+      });
+    }
+  }
+
+  /**
+   * Generate quick AI suggestions for immediate doctor reference
+   */
+  async generateQuickSuggestions(req: Request, res: Response): Promise<void> {
+    try {
+      const { patientId, symptoms } = req.body;
+
+      if (!patientId) {
+        res.status(400).json({
+          success: false,
+          message: 'Patient ID is required'
+        });
+        return;
+      }
+
+      if (!symptoms || !Array.isArray(symptoms) || symptoms.length === 0) {
+        res.status(400).json({
+          success: false,
+          message: 'Symptoms array is required for quick suggestions'
+        });
+        return;
+      }
+
+      // Get basic patient data
+      const patient = await prisma.patient.findUnique({
+        where: { id: patientId }
+      });
+
+      if (!patient) {
+        res.status(404).json({
+          success: false,
+          message: 'Patient not found'
+        });
+        return;
+      }
+
+      const patientAge = patient.dateOfBirth ? 
+        Math.floor((Date.now() - new Date(patient.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 
+        30; // Default age if not available
+
+      // Generate quick suggestions
+      const suggestions = await aiInsightsService.generateQuickSuggestions(
+        symptoms,
+        patientAge,
+        patient.gender || 'unknown'
+      );
+
+      res.json({
+        success: true,
+        data: {
+          suggestions,
+          patientId,
+          generatedAt: new Date().toISOString(),
+          contextUsed: {
+            symptoms: symptoms,
+            patientAge: patientAge,
+            gender: patient.gender
+          }
+        }
+      });
+
+    } catch (error) {
+      logger.error('Error generating quick suggestions:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to generate quick suggestions'
+      });
+    }
+  }
+
+  /**
+   * Get family data formatted for AI analysis
+   */
+  private async getFamilyDataForAI(patientId: string) {
+    try {
+      // Get patient's family groups using correct model name from schema
+      // Using familyMember (camelCase) as per Prisma convention
+      const familyMemberships = await (prisma as any).familyMember.findMany({
+        where: { patientId: patientId },
+        include: {
+          familyGroup: {
+            include: {
+              members: {
+                include: {
+                  patient: {
+                    include: {
+                      medicalRecords: {
+                        orderBy: { createdAt: 'desc' },
+                        take: 5,
+                        where: {
+                          isActive: true
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
+
+      const familyGroups: any[] = [];
+      const sharedMedicalHistory: any[] = [];
+      const emergencyContacts: any[] = [];
+
+      for (const membership of familyMemberships) {
+        const familyMembers = membership.familyGroup.members.map((member: any) => ({
+          id: member.patient.id,
+          name: `${member.patient.firstName} ${member.patient.lastName}`,
+          relationship: member.relationship,
+          age: member.patient.dateOfBirth ? 
+            Math.floor((Date.now() - new Date(member.patient.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 
+            null,
+          gender: member.patient.gender || 'unknown',
+          bloodType: member.patient.bloodType || 'unknown',
+          emergencyContact: member.patient.emergencyContact || {}
+        }));
+
+        familyGroups.push({
+          groupId: membership.familyGroup.id,
+          groupName: membership.familyGroup.name,
+          relationship: membership.relationship,
+          members: familyMembers
+        });
+
+        // Collect shared medical history
+        for (const member of membership.familyGroup.members) {
+          if (member.patientId !== patientId && member.patient.medicalRecords.length > 0) {
+            member.patient.medicalRecords.forEach((record: any) => {
+              sharedMedicalHistory.push({
+                recordId: record.id,
+                fromPatient: `${member.patient.firstName} ${member.patient.lastName}`,
+                recordType: record.recordType,
+                diagnosis: record.diagnosis?.join(', ') || '',
+                medications: record.medications?.map((med: any) => med.name || med.medication)?.join(', ') || '',
+                notes: record.notes || '',
+                severity: record.severity || 'unknown',
+                shareLevel: 'family',
+                sharedAt: record.createdAt.toISOString()
+              });
+            });
+          }
+        }
+
+        // Extract emergency contacts
+        familyMembers.forEach((member: any) => {
+          if (member.emergencyContact && typeof member.emergencyContact === 'object') {
+            emergencyContacts.push({
+              name: member.emergencyContact.name || member.name,
+              relationship: member.relationship,
+              contact: member.emergencyContact
+            });
+          }
+        });
+      }
+
+      return {
+        familyGroups,
+        sharedMedicalHistory,
+        emergencyContacts
+      };
+
+    } catch (error) {
+      logger.error('Error fetching family data for AI:', error);
+      return {
+        familyGroups: [],
+        sharedMedicalHistory: [],
+        emergencyContacts: []
+      };
     }
   }
 

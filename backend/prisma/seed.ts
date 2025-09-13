@@ -192,12 +192,29 @@ async function main() {
     }
   ];
 
+  const createdRecords: any[] = [];
   for (const recordData of medicalRecords) {
     const record = await prisma.medicalRecord.create({
       data: recordData,
     });
+    createdRecords.push(record);
     console.log('✅ Created medical record:', record.title);
   }
+
+  // Create QR share token for testing AI functionality
+  const qrToken = await prisma.qrShareToken.create({
+    data: {
+      token: '45bc2f44-fda8-4ab5-a3f5-baa5e33923a6', // Use the UUID from frontend logs
+      userId: patient.userId,
+      recordIds: createdRecords.map(r => r.id), // Use actual record IDs
+      shareType: 'full',
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+      blockchainHash: 'demo_hash_' + Date.now(),
+      facilityId: 'default-facility',
+    },
+  });
+
+  console.log('✅ Created QR share token:', qrToken.token);
 
   console.log('🎉 Database seeding completed successfully!');
 }

@@ -124,7 +124,9 @@ class CloudCareServer {
     this.app.use(`${API_BASE}/doctors`, validateJWT, doctorRoutes);
     this.app.use(`${API_BASE}/medical-records`, validateJWT, medicalRecordRoutes);
     this.app.use(`${API_BASE}/abha`, validateJWT, abhaRoutes);
-    this.app.use(`${API_BASE}/qr`, validateJWT, qrRoutes);
+    
+    // QR routes - mixed authentication (AI endpoints are public, others require JWT)
+    this.app.use(`${API_BASE}/qr`, qrRoutes);
     
     // New comprehensive healthcare routes
     this.app.use(`${API_BASE}/medications`, validateJWT, medicationsRoutes);

@@ -117,4 +117,50 @@ router.get('/history',
   qrController.getQRHistory.bind(qrController)
 );
 
+// AI Insights Routes for Doctor Portal
+
+// Generate comprehensive AI insights based on patient and family data
+router.post('/ai/insights',
+  [
+    body('patientId')
+      .isString()
+      .withMessage('Patient ID is required'),
+    body('qrToken')
+      .optional()
+      .isUUID()
+      .withMessage('QR token must be a valid UUID'),
+    body('consultationType')
+      .optional()
+      .isIn(['routine', 'emergency', 'follow_up', 'initial'])
+      .withMessage('Consultation type must be routine, emergency, follow_up, or initial'),
+    body('symptoms')
+      .optional()
+      .isArray()
+      .withMessage('Symptoms must be an array'),
+    body('chiefComplaint')
+      .optional()
+      .isString()
+      .withMessage('Chief complaint must be a string')
+  ],
+  validateRequest,
+  qrController.generateAIInsights.bind(qrController)
+);
+
+// Generate quick AI suggestions for immediate reference
+router.post('/ai/quick-suggestions',
+  [
+    body('patientId')
+      .isString()
+      .withMessage('Patient ID is required'),
+    body('symptoms')
+      .isArray({ min: 1 })
+      .withMessage('At least one symptom is required'),
+    body('symptoms.*')
+      .isString()
+      .withMessage('Each symptom must be a string')
+  ],
+  validateRequest,
+  qrController.generateQuickSuggestions.bind(qrController)
+);
+
 export default router;

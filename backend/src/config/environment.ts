@@ -63,6 +63,10 @@ export interface ServerConfig {
     file: string;
     auditFile: string;
   };
+  ai: {
+    geminiApiKey: string;
+    enabled: boolean;
+  };
 }
 
 const requiredEnvVars = [
@@ -131,7 +135,7 @@ export const config: ServerConfig = {
 
   rateLimit: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10), // 15 minutes
-    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10)
+    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || (process.env.NODE_ENV === 'development' ? '1000' : '100'), 10)
   },
 
   cors: {
@@ -148,6 +152,11 @@ export const config: ServerConfig = {
     level: process.env.LOG_LEVEL || 'info',
     file: process.env.LOG_FILE || 'logs/cloudcare.log',
     auditFile: process.env.AUDIT_LOG_FILE || 'logs/audit.log'
+  },
+
+  ai: {
+    geminiApiKey: process.env.GEMINI_API_KEY || 'AIzaSyAWz4pZRDx5OJbFDsQqK1-s8dTjTfXcOig',
+    enabled: process.env.AI_INSIGHTS_ENABLED !== 'false'
   }
 };
 

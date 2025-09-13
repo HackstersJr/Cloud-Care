@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, User, Calendar, FileText, AlertCircle, Clock, Stethoscope, Plus, Edit, Trash2 } from 'lucide-react';
 import MedicalRecordForm from './forms/MedicalRecordForm';
+import AIInsights from './ai/AIInsights';
 import { apiClient } from '../utils/api';
 
 interface PatientRecord {
@@ -232,6 +233,19 @@ const PatientRecordsView: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* AI Insights Section */}
+        <AIInsights 
+          patientId={qrData.patient.id || ''}
+          qrToken={location.state?.qrToken}
+          patientData={{
+            name: qrData.patient.name,
+            age: qrData.patient.dateOfBirth ? 
+              Math.floor((Date.now() - new Date(qrData.patient.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 
+              undefined,
+            gender: qrData.patient.gender
+          }}
+        />
 
         {/* Medical Records */}
         <div className="bg-white rounded-lg shadow-sm border">

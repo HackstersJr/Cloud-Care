@@ -933,6 +933,43 @@ class ApiClient {
     return this.request('/qr/history');
   }
 
+  /**
+   * Generate AI insights for patient data
+   */
+  async generateAIInsights(data: {
+    patientId: string;
+    qrToken?: string;
+  }): Promise<ApiResponse<{
+    insights: any[];
+    patientId: string;
+    generatedAt: string;
+    dataSource: string;
+  }>> {
+    return this.request('/qr/ai-insights', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Generate quick AI suggestions for patient
+   */
+  async generateQuickSuggestions(data: {
+    patientId: string;
+    symptoms?: string[];
+    chiefComplaint?: string;
+  }): Promise<ApiResponse<{
+    suggestions: any[];
+    patientId: string;
+    generatedAt: string;
+    contextUsed: any;
+  }>> {
+    return this.request('/qr/quick-suggestions', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   // ============= UTILITY METHODS =============
 
   /**
@@ -1160,3 +1197,37 @@ class ApiClient {
 
 // Export singleton instance
 export const apiClient = new ApiClient();
+
+// Export individual functions for convenience
+export const login = (data: StandardLoginData) => apiClient.login(data);
+export const register = (data: RegisterData) => apiClient.register(data);
+export const logout = () => apiClient.logout();
+
+// Family management functions
+export const createFamilyGroup = (data: { name: string; description?: string }) => 
+  apiClient.createFamilyGroup(data);
+export const getFamilyGroups = () => apiClient.getFamilyGroups();
+export const getFamilyGroup = (id: string) => apiClient.getFamilyGroup(id);
+export const sendFamilyInvitation = (data: { 
+  familyGroupId: string; 
+  inviteeEmail: string; 
+  inviteePhone?: string;
+  proposedRelationship: string; 
+  message?: string 
+}) => apiClient.sendFamilyInvitation(data);
+export const getFamilyInvitations = (type?: 'sent' | 'received') => 
+  apiClient.getFamilyInvitations(type);
+export const respondToFamilyInvitation = (token: string, action: 'accept' | 'decline') => 
+  apiClient.respondToFamilyInvitation(token, action);
+export const shareMedicalRecord = (data: { 
+  familyGroupId: string;
+  recordId: string;
+  shareLevel: 'summary' | 'partial' | 'full' | 'emergency';
+  allowedMembers?: string[];
+  expiresAt?: string;
+}) => apiClient.shareMedicalRecord(data);
+export const getFamilySharedRecords = (familyGroupId: string, patientId?: string) => 
+  apiClient.getFamilySharedRecords(familyGroupId, patientId);
+export const getFamilyHealthInsights = (familyGroupId: string) => 
+  apiClient.getFamilyHealthInsights(familyGroupId);
+export const getFamilyInsightsOverview = () => apiClient.getFamilyInsightsOverview();

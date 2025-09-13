@@ -18,15 +18,28 @@ const Dashboard = () => {
     );
   }
 
+  // Get the appropriate title based on user role
+  const getTitle = () => {
+    switch (user.role) {
+      case 'doctor':
+      case 'nurse':
+      case 'admin':
+        return 'Doctor Dashboard';
+      case 'patient':
+      default:
+        return 'Dashboard';
+    }
+  };
+
   // Render role-specific dashboard
   const renderDashboardContent = () => {
     switch (user.role) {
       case 'doctor':
-        return <DoctorDashboard />;
+        return <DoctorDashboard standalone={false} />;
       case 'nurse':
-        return <DoctorDashboard />; // Nurses can use the same doctor interface for now
+        return <DoctorDashboard standalone={false} />; // Nurses can use the same doctor interface for now
       case 'admin':
-        return <DoctorDashboard />; // Admins can use the same doctor interface for now
+        return <DoctorDashboard standalone={false} />; // Admins can use the same doctor interface for now
       case 'patient':
       default:
         return <PatientDashboard />;
@@ -34,7 +47,7 @@ const Dashboard = () => {
   };
 
   return (
-    <Layout title="Dashboard">
+    <Layout title={getTitle()}>
       {renderDashboardContent()}
     </Layout>
   );

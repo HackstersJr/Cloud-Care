@@ -216,7 +216,22 @@ router.get('/groups/:id',
         return;
       }
 
-      const patientId = user.id;
+      const userId = user.id;
+
+      // Get the actual patient record
+      const patient = await prisma.patient.findUnique({
+        where: { userId: userId }
+      });
+
+      if (!patient) {
+        res.status(404).json({
+          success: false,
+          message: 'Patient record not found'
+        });
+        return;
+      }
+
+      const patientId = patient.id;
 
       // Check if user is member of this family group
       const membership = await prisma.familyMember.findFirst({
@@ -328,7 +343,22 @@ router.post('/invitations',
         return;
       }
 
-      const patientId = user.id;
+      const userId = user.id;
+
+      // Get the actual patient record
+      const patient = await prisma.patient.findUnique({
+        where: { userId: userId }
+      });
+
+      if (!patient) {
+        res.status(404).json({
+          success: false,
+          message: 'Patient record not found'
+        });
+        return;
+      }
+
+      const patientId = patient.id;
 
       // Check if user has permission to invite (admin or moderator)
       const membership = await prisma.familyMember.findFirst({

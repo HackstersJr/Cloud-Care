@@ -19,6 +19,9 @@ import PatientRecordsView from './components/PatientRecordsView';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
+// Import new family pages
+import { FamilyGroupsPage, FamilyMembersPage, QRSharePage } from './pages/family';
+
 export type UserType = 'abha' | 'doctor' | null;
 
 // Main App Routes Component
@@ -165,6 +168,34 @@ function AppRoutes() {
       
       <Route 
         path="/family" 
+        element={
+          <ProtectedRoute>
+            <FamilyGroupsPage />
+          </ProtectedRoute>
+        } 
+      />
+      
+      <Route 
+        path="/family/:groupId/members" 
+        element={
+          <ProtectedRoute>
+            <FamilyMembersPage />
+          </ProtectedRoute>
+        } 
+      />
+      
+      <Route 
+        path="/family/qr-share" 
+        element={
+          <ProtectedRoute>
+            <QRSharePage />
+          </ProtectedRoute>
+        } 
+      />
+
+      {/* Legacy family dashboard route for backward compatibility */}
+      <Route 
+        path="/family-dashboard" 
         element={
           <ProtectedRoute>
             <FamilyDashboard />

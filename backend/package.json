@@ -34,6 +34,7 @@
   "author": "CloudCare Team",
   "license": "UNLICENSED",
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@prisma/client": "^5.22.0",
     "@types/bcrypt": "^6.0.0",
     "bcrypt": "^6.0.0",

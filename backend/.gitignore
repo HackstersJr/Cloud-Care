@@ -8,16 +8,8 @@ yarn-error.log*
 dist/
 build/
 
-# Environment variables
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
 
-# Logs
-logs/
-*.log
+
 
 # Runtime data
 pids
@@ -54,9 +46,6 @@ Thumbs.db
 .Trashes
 ehthumbs.db
 
-# Medical files (uploaded content)
-uploads/
-medical-files/
 
 # Backup files
 *.backup
