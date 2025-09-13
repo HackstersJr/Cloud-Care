@@ -76,6 +76,13 @@ model Patient {
   blockchainRecords  BlockchainRecord[]
   consentRequests    ConsentRequest[]
   consentApprovals   ConsentApproval[]
+  
+  // Family Management Relations
+  adminFamilyGroups  FamilyGroup[] @relation("FamilyGroupAdmin")
+  familyMemberships  FamilyMember[] @relation("FamilyMembership")
+  sentInvitations    FamilyInvitation[]
+  sharedRecords      FamilySharedRecord[]
+  familyBlockchainRecords FamilyBlockchainRecord[] @relation("FamilyBlockchainRecords")
 
   @@map("patients")
 }
@@ -166,6 +173,7 @@ model MedicalRecord {
   doctor                Doctor?   @relation(fields: [doctorId], references: [id])
   qrCodeShares          QrCodeShare[]
   blockchainRecords     BlockchainRecord[]
+  familySharedRecords   FamilySharedRecord[]
 
   @@map("medical_records")
 }
@@ -557,6 +565,71 @@ enum ConsentAction {
   revoked
 }
 
+// =============================================================================
+// FAMILY MANAGEMENT ENUMS
+// =============================================================================
+
+enum FamilyRelationship {
+  parent
+  child
+  spouse
+  sibling
+  grandparent
+  grandchild
+  aunt_uncle
+  niece_nephew
+  cousin
+  guardian
+  other
+}
+
+enum FamilyRole {
+  admin
+  moderator
+  member
+}
+
+enum FamilyPermission {
+  view_basic_info
+  view_medical_history
+  view_lab_results
+  view_prescriptions
+  view_appointments
+  schedule_appointments
+  emergency_access
+  full_access
+}
+
+enum InvitationStatus {
+  pending
+  accepted
+  declined
+  expired
+  cancelled
+}
+
+enum ShareLevel {
+  summary      // Basic health status only
+  partial      // Selected records
+  full         // All medical records
+  emergency    // Emergency access only
+}
+
+enum FamilyRecordType {
+  member_joined
+  member_left
+  record_shared
+  record_unshared
+  permission_changed
+  emergency_access
+  consent_given
+  consent_revoked
+}
+
+// =============================================================================
+// CONSENT MANAGEMENT MODELS
+// =============================================================================
+
 // Consent Requests model
 model ConsentRequest {
   id               String            @id @default(uuid()) @db.Uuid
@@ -604,4 +677,117 @@ model ConsentApproval {
   patient           Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
   @@map("consent_approvals")
+}
+
+// =============================================================================
+// FAMILY MANAGEMENT MODELS
+// =============================================================================
+
+// Family Groups - Core family unit
+model FamilyGroup {
+  id              String              @id @default(uuid()) @db.Uuid
+  name            String              @db.VarChar(100)
+  description     String?
+  adminId         String              @map("admin_id") @db.Uuid
+  inviteCode      String?             @unique @map("invite_code") @db.VarChar(10)
+  settings        Json                @default("{}") @db.JsonB
+  isActive        Boolean             @default(true) @map("is_active")
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  admin           Patient             @relation("FamilyGroupAdmin", fields: [adminId], references: [id])
+  members         FamilyMember[]
+  invitations     FamilyInvitation[]
+  sharedRecords   FamilySharedRecord[]
+  blockchainRecords FamilyBlockchainRecord[]
+
+  @@map("family_groups")
+}
+
+// Family Members - Patients belonging to a family group
+model FamilyMember {
+  id              String              @id @default(uuid()) @db.Uuid
+  familyGroupId   String              @map("family_group_id") @db.Uuid
+  patientId       String              @map("patient_id") @db.Uuid
+  relationship    FamilyRelationship
+  role            FamilyRole          @default(member)
+  permissions     FamilyPermission[]  @default([])
+  joinedAt        DateTime            @default(now()) @map("joined_at") @db.Timestamptz
+  isActive        Boolean             @default(true) @map("is_active")
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  familyGroup     FamilyGroup         @relation(fields: [familyGroupId], references: [id], onDelete: Cascade)
+  patient         Patient             @relation("FamilyMembership", fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([familyGroupId, patientId])
+  @@map("family_members")
+}
+
+// Family Invitations - Pending invitations to join family
+model FamilyInvitation {
+  id              String              @id @default(uuid()) @db.Uuid
+  familyGroupId   String              @map("family_group_id") @db.Uuid
+  invitedBy       String              @map("invited_by") @db.Uuid
+  inviteeEmail    String              @map("invitee_email") @db.VarChar(255)
+  inviteePhone    String?             @map("invitee_phone") @db.VarChar(20)
+  proposedRelationship FamilyRelationship @map("proposed_relationship")
+  token           String              @unique @db.VarChar(64)
+  status          InvitationStatus    @default(pending)
+  message         String?
+  expiresAt       DateTime            @map("expires_at") @db.Timestamptz
+  respondedAt     DateTime?           @map("responded_at") @db.Timestamptz
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  familyGroup     FamilyGroup         @relation(fields: [familyGroupId], references: [id], onDelete: Cascade)
+  inviter         Patient             @relation(fields: [invitedBy], references: [id])
+
+  @@map("family_invitations")
+}
+
+// Family Shared Records - Medical records shared within family
+model FamilySharedRecord {
+  id                String              @id @default(uuid()) @db.Uuid
+  familyGroupId     String              @map("family_group_id") @db.Uuid
+  recordId          String              @map("record_id") @db.Uuid
+  sharedBy          String              @map("shared_by") @db.Uuid
+  shareLevel        ShareLevel          @default(summary)
+  permissions       FamilyPermission[]  @default([])
+  allowedMembers    String[]            @default([]) @map("allowed_members")
+  sharedAt          DateTime            @default(now()) @map("shared_at") @db.Timestamptz
+  expiresAt         DateTime?           @map("expires_at") @db.Timestamptz
+  isActive          Boolean             @default(true) @map("is_active")
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  familyGroup       FamilyGroup         @relation(fields: [familyGroupId], references: [id], onDelete: Cascade)
+  record            MedicalRecord       @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  sharer            Patient             @relation(fields: [sharedBy], references: [id])
+
+  @@unique([familyGroupId, recordId])
+  @@map("family_shared_records")
+}
+
+// Family Blockchain Records - Immutable family health events
+model FamilyBlockchainRecord {
+  id                String              @id @default(uuid()) @db.Uuid
+  familyGroupId     String              @map("family_group_id") @db.Uuid
+  recordType        FamilyRecordType
+  dataHash          String              @map("data_hash") @db.VarChar(66)
+  transactionHash   String?             @map("transaction_hash") @db.VarChar(66)
+  blockNumber       BigInt?             @map("block_number")
+  patientId         String              @map("patient_id") @db.Uuid
+  metadata          Json                @default("{}") @db.JsonB
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  familyGroup       FamilyGroup         @relation(fields: [familyGroupId], references: [id], onDelete: Cascade)
+  patient           Patient             @relation("FamilyBlockchainRecords", fields: [patientId], references: [id])
+
+  @@map("family_blockchain_records")
 }

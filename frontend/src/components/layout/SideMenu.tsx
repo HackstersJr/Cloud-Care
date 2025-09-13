@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   X, Shield, Clock, Languages, Share2, HelpCircle, 
   FileText, Handshake, Settings, Info, MessageCircle, 
-  LogOut, Smartphone, Home, Link 
+  LogOut, Smartphone, Home, Link, Users 
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -19,6 +19,7 @@ const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
   const menuItems = [
     { icon: Home, label: 'Dashboard', action: () => { navigate('/dashboard'); onClose(); } },
     { icon: Link, label: 'Linked Facilities', action: () => { navigate('/facilities'); onClose(); } },
+    { icon: Users, label: 'Family Health Network', action: () => { navigate('/family'); onClose(); } },
     { icon: Shield, label: 'Health locker', action: () => {} },
     { icon: Clock, label: 'Token history', action: () => {} },
     { icon: Languages, label: 'Language change', action: () => {} },

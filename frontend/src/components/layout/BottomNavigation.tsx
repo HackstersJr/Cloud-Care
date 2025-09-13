@@ -22,6 +22,12 @@ const BottomNavigation = () => {
       isActive: location.pathname === '/records'
     },
     { 
+      path: '/family', 
+      icon: Users, 
+      label: 'Family',
+      isActive: location.pathname === '/family'
+    },
+    { 
       path: '/scan', 
       icon: QrCode, 
       label: 'Scan & Share',

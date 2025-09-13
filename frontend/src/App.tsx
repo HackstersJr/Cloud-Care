@@ -13,6 +13,7 @@ import ScanShare from './components/ScanShare';
 import Wearables from './components/Wearables';
 import Settings from './components/Settings';
 import Profile from './components/Profile';
+import FamilyDashboard from './components/FamilyDashboard';
 import PatientDataLanding from './components/PatientDataLanding';
 import PatientRecordsView from './components/PatientRecordsView';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -158,6 +159,15 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <Profile />
+          </ProtectedRoute>
+        } 
+      />
+      
+      <Route 
+        path="/family" 
+        element={
+          <ProtectedRoute>
+            <FamilyDashboard />
           </ProtectedRoute>
         } 
       />

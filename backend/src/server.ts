@@ -30,6 +30,7 @@ import medicationsRoutes from './routes/medications';
 import appointmentsRoutes from './routes/appointments';
 import vitalsRoutes from './routes/vitals';
 import consentRoutes from './routes/consents';
+import familyRoutes from './routes/family';
 
 // Load environment variables
 dotenv.config();
@@ -130,6 +131,7 @@ class CloudCareServer {
     this.app.use(`${API_BASE}/appointments`, validateJWT, appointmentsRoutes);
     this.app.use(`${API_BASE}/vitals`, validateJWT, vitalsRoutes);
     this.app.use(`${API_BASE}/consents`, consentRoutes);
+    this.app.use(`${API_BASE}/family`, validateJWT, familyRoutes);
 
     // 404 handler
     this.app.use('*', (req, res) => {

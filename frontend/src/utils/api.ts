@@ -1016,6 +1016,140 @@ class ApiClient {
     });
   }
 
+  // ============= BASIC HTTP METHODS =============
+
+  /**
+   * Generic GET request
+   */
+  async get<T>(endpoint: string): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, { method: 'GET' });
+  }
+
+  /**
+   * Generic POST request
+   */
+  async post<T>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: 'POST',
+      body: data ? JSON.stringify(data) : undefined
+    });
+  }
+
+  /**
+   * Generic PATCH request
+   */
+  async patch<T>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: 'PATCH',
+      body: data ? JSON.stringify(data) : undefined
+    });
+  }
+
+  /**
+   * Generic DELETE request
+   */
+  async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, { method: 'DELETE' });
+  }
+
+  // ============= FAMILY MANAGEMENT APIs =============
+
+  /**
+   * Create a new family group
+   */
+  async createFamilyGroup(data: {
+    name: string;
+    description?: string;
+  }): Promise<ApiResponse<any>> {
+    return this.post('/family/groups', data);
+  }
+
+  /**
+   * Get family groups for current patient
+   */
+  async getFamilyGroups(): Promise<ApiResponse<any[]>> {
+    return this.get('/family/groups');
+  }
+
+  /**
+   * Get specific family group details
+   */
+  async getFamilyGroup(id: string): Promise<ApiResponse<any>> {
+    return this.get(`/family/groups/${id}`);
+  }
+
+  /**
+   * Send family invitation
+   */
+  async sendFamilyInvitation(data: {
+    familyGroupId: string;
+    inviteeEmail: string;
+    inviteePhone?: string;
+    proposedRelationship: string;
+    message?: string;
+  }): Promise<ApiResponse<any>> {
+    return this.post('/family/invitations', data);
+  }
+
+  /**
+   * Get family invitations
+   */
+  async getFamilyInvitations(type?: 'sent' | 'received'): Promise<ApiResponse<any>> {
+    const endpoint = type ? `/family/invitations?type=${type}` : '/family/invitations';
+    return this.get(endpoint);
+  }
+
+  /**
+   * Respond to family invitation
+   */
+  async respondToFamilyInvitation(token: string, action: 'accept' | 'decline'): Promise<ApiResponse<any>> {
+    return this.patch(`/family/invitations/${token}`, { action });
+  }
+
+  /**
+   * Share medical record with family
+   */
+  async shareMedicalRecord(data: {
+    familyGroupId: string;
+    recordId: string;
+    shareLevel: 'summary' | 'partial' | 'full' | 'emergency';
+    allowedMembers?: string[];
+    expiresAt?: string;
+  }): Promise<ApiResponse<any>> {
+    return this.post('/family/share-record', data);
+  }
+
+  /**
+   * Get shared medical records for family group
+   */
+  async getFamilySharedRecords(familyGroupId: string, patientId?: string): Promise<ApiResponse<any[]>> {
+    const endpoint = patientId 
+      ? `/family/groups/${familyGroupId}/shared-records?patientId=${patientId}`
+      : `/family/groups/${familyGroupId}/shared-records`;
+    return this.get(endpoint);
+  }
+
+  /**
+   * Unshare medical record from family
+   */
+  async unshareMedicalRecord(sharedRecordId: string): Promise<ApiResponse<any>> {
+    return this.delete(`/family/shared-records/${sharedRecordId}`);
+  }
+
+  /**
+   * Get family health insights (for doctors)
+   */
+  async getFamilyHealthInsights(familyGroupId: string): Promise<ApiResponse<any>> {
+    return this.get(`/family/health-insights/${familyGroupId}`);
+  }
+
+  /**
+   * Get family insights overview for doctors
+   */
+  async getFamilyInsightsOverview(): Promise<ApiResponse<any>> {
+    return this.get('/family/insights-overview');
+  }
+
   /**
    * Get current access token
    */

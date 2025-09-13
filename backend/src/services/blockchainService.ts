@@ -464,6 +464,262 @@ export class BlockchainService {
       ...(this.wallet && { walletAddress: this.wallet.address })
     };
   }
+
+  // =============================================================================
+  // FAMILY-SPECIFIC BLOCKCHAIN OPERATIONS
+  // =============================================================================
+
+  /**
+   * Store family consent record on blockchain
+   * Creates an immutable record of family consent/sharing permissions
+   */
+  async storeFamilyConsent(
+    familyGroupId: string,
+    patientId: string,
+    consentType: string,
+    recordHash: string,
+    permissions: string[]
+  ): Promise<BlockchainTransaction> {
+    if (!this.wallet) {
+      throw new Error('Wallet not initialized - cannot write to blockchain');
+    }
+
+    if (!this.isConnected) {
+      await this.checkConnection();
+      if (!this.isConnected) {
+        throw new Error('Blockchain not connected');
+      }
+    }
+
+    try {
+      const metadata = {
+        type: 'family_consent',
+        familyGroupId,
+        patientId,
+        consentType,
+        recordHash,
+        permissions,
+        timestamp: Math.floor(Date.now() / 1000)
+      };
+
+      const encodedData = ethers.toUtf8Bytes(JSON.stringify(metadata));
+
+      const transaction = {
+        to: '0x0000000000000000000000000000000000000000',
+        value: 0,
+        data: ethers.hexlify(encodedData)
+      };
+
+      const estimatedGas = await this.provider.estimateGas(transaction);
+      const gasLimit = estimatedGas + (estimatedGas * BigInt(20) / BigInt(100));
+      
+      const finalTransaction = {
+        ...transaction,
+        gasLimit
+      };
+
+      const txResponse = await this.wallet.sendTransaction(finalTransaction);
+      const receipt = await txResponse.wait();
+
+      if (!receipt) {
+        throw new Error('Transaction receipt not available');
+      }
+
+      const result: BlockchainTransaction = {
+        hash: receipt.hash,
+        blockNumber: receipt.blockNumber,
+        gasUsed: receipt.gasUsed.toString(),
+        gasPrice: receipt.gasPrice?.toString() || '0',
+        timestamp: Math.floor(Date.now() / 1000)
+      };
+
+      logger.info(`Family consent stored on blockchain: ${result.hash}`, {
+        familyGroupId,
+        patientId,
+        consentType,
+        blockNumber: result.blockNumber
+      });
+
+      return result;
+
+    } catch (error) {
+      logger.error('Error storing family consent on blockchain:', error);
+      throw new Error(`Failed to store family consent: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Store family member joining record on blockchain
+   */
+  async storeFamilyMemberJoin(
+    familyGroupId: string,
+    newMemberId: string,
+    invitedBy: string,
+    relationship: string
+  ): Promise<BlockchainTransaction> {
+    if (!this.wallet) {
+      throw new Error('Wallet not initialized - cannot write to blockchain');
+    }
+
+    try {
+      const metadata = {
+        type: 'family_member_join',
+        familyGroupId,
+        newMemberId,
+        invitedBy,
+        relationship,
+        timestamp: Math.floor(Date.now() / 1000)
+      };
+
+      const encodedData = ethers.toUtf8Bytes(JSON.stringify(metadata));
+
+      const transaction = {
+        to: '0x0000000000000000000000000000000000000000',
+        value: 0,
+        data: ethers.hexlify(encodedData)
+      };
+
+      const estimatedGas = await this.provider.estimateGas(transaction);
+      const gasLimit = estimatedGas + (estimatedGas * BigInt(20) / BigInt(100));
+      
+      const finalTransaction = {
+        ...transaction,
+        gasLimit
+      };
+
+      const txResponse = await this.wallet.sendTransaction(finalTransaction);
+      const receipt = await txResponse.wait();
+
+      if (!receipt) {
+        throw new Error('Transaction receipt not available');
+      }
+
+      const result: BlockchainTransaction = {
+        hash: receipt.hash,
+        blockNumber: receipt.blockNumber,
+        gasUsed: receipt.gasUsed.toString(),
+        gasPrice: receipt.gasPrice?.toString() || '0',
+        timestamp: Math.floor(Date.now() / 1000)
+      };
+
+      logger.info(`Family member join stored on blockchain: ${result.hash}`, {
+        familyGroupId,
+        newMemberId,
+        relationship
+      });
+
+      return result;
+
+    } catch (error) {
+      logger.error('Error storing family member join on blockchain:', error);
+      throw new Error(`Failed to store family member join: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Store medical record sharing event on blockchain
+   */
+  async storeMedicalRecordShare(
+    familyGroupId: string,
+    recordId: string,
+    sharedBy: string,
+    shareLevel: string,
+    allowedMembers: string[]
+  ): Promise<BlockchainTransaction> {
+    if (!this.wallet) {
+      throw new Error('Wallet not initialized - cannot write to blockchain');
+    }
+
+    try {
+      const metadata = {
+        type: 'medical_record_share',
+        familyGroupId,
+        recordId,
+        sharedBy,
+        shareLevel,
+        allowedMembers,
+        timestamp: Math.floor(Date.now() / 1000)
+      };
+
+      const encodedData = ethers.toUtf8Bytes(JSON.stringify(metadata));
+
+      const transaction = {
+        to: '0x0000000000000000000000000000000000000000',
+        value: 0,
+        data: ethers.hexlify(encodedData)
+      };
+
+      const estimatedGas = await this.provider.estimateGas(transaction);
+      const gasLimit = estimatedGas + (estimatedGas * BigInt(20) / BigInt(100));
+      
+      const finalTransaction = {
+        ...transaction,
+        gasLimit
+      };
+
+      const txResponse = await this.wallet.sendTransaction(finalTransaction);
+      const receipt = await txResponse.wait();
+
+      if (!receipt) {
+        throw new Error('Transaction receipt not available');
+      }
+
+      const result: BlockchainTransaction = {
+        hash: receipt.hash,
+        blockNumber: receipt.blockNumber,
+        gasUsed: receipt.gasUsed.toString(),
+        gasPrice: receipt.gasPrice?.toString() || '0',
+        timestamp: Math.floor(Date.now() / 1000)
+      };
+
+      logger.info(`Medical record sharing stored on blockchain: ${result.hash}`, {
+        familyGroupId,
+        recordId,
+        shareLevel
+      });
+
+      return result;
+
+    } catch (error) {
+      logger.error('Error storing medical record sharing on blockchain:', error);
+      throw new Error(`Failed to store medical record sharing: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Verify family blockchain record integrity
+   */
+  async verifyFamilyRecord(transactionHash: string): Promise<any> {
+    try {
+      const transaction = await this.provider.getTransaction(transactionHash);
+      
+      if (!transaction) {
+        return { valid: false, reason: 'Transaction not found' };
+      }
+
+      if (transaction.data && transaction.data !== '0x') {
+        try {
+          const decodedData = ethers.toUtf8String(transaction.data);
+          const metadata = JSON.parse(decodedData);
+          
+          return {
+            valid: true,
+            metadata,
+            blockNumber: transaction.blockNumber,
+            timestamp: metadata.timestamp
+          };
+        } catch (decodeError) {
+          return { valid: false, reason: 'Unable to decode transaction data' };
+        }
+      }
+
+      return { valid: false, reason: 'No data in transaction' };
+
+    } catch (error) {
+      logger.error('Error verifying family blockchain record:', error);
+      return { valid: false, reason: 'Verification failed', error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
 }
 
 // Export singleton instance
