@@ -64,8 +64,9 @@ class CloudCareServer {
     }));
 
     // CORS configuration
+    const corsOrigin = config.env === 'development' ? true : config.cors.origin;
     this.app.use(cors({
-      origin: config.cors.origin,
+      origin: corsOrigin,
       credentials: config.cors.credentials,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
       allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']

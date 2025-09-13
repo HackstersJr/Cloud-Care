@@ -214,7 +214,8 @@ class ApiClient {
   private refreshToken: string | null = null;
 
   constructor() {
-    this.baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api/v1';
+  // Use relative path by default so LAN clients hit the same host the frontend is served from
+  this.baseURL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
     this.loadTokens();
   }
 
