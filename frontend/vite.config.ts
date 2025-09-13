@@ -9,7 +9,7 @@ export default defineConfig({
     port: 5174,
     proxy: {
       '/api/v2': {
-        target: 'http://10.44.0.82:6644', // HCGateway API server
+        target: process.env.VITE_WEARABLES_SERVICE_URL || 'http://localhost:6644', // HCGateway API server
         changeOrigin: true,
         secure: false,
       },

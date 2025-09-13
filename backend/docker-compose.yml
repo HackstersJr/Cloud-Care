@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: cloudcare_dev_password
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     ports:
-      - "192.168.137.1:5432:5432"
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init:/docker-entrypoint-initdb.d
@@ -27,7 +27,7 @@ services:
     image: redis:7-alpine
     container_name: cloudcare-redis
     ports:
-      - "192.168.137.1:6379:6379"
+      - "6379:6379"
     volumes:
       - redis_data:/data
     networks:
@@ -62,8 +62,10 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: cloudcare_redis_password
+      WEARABLES_SERVICE_URL: http://wearables:6644
+      WEARABLES_SERVICE_ENABLED: "true"
     ports:
-      - "192.168.137.1:3000:3000"
+      - "3000:3000"
     volumes:
       - ./logs:/app/logs
       - ./uploads:/app/uploads
@@ -73,6 +75,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      wearables-db:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -101,14 +105,60 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: npm run migrate
+    command: npm run db:migrate
     volumes:
       - ./database:/app/database
+
+  # MongoDB for Wearables Service
+  wearables-db:
+    image: mongo:7-jammy
+    container_name: cloudcare-wearables-db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: iotopia
+    ports:
+      - "27017:27017"
+    volumes:
+      - wearables_mongo_data:/data/db
+    networks:
+      - cloudcare-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Wearables Service
+  wearables:
+    build:
+      context: ./wearables
+      dockerfile: Dockerfile
+    container_name: cloudcare-wearables
+    env_file:
+      - ./wearables/.env
+    environment:
+      APP_HOST: 0.0.0.0
+      APP_PORT: 6644
+      APP_DEBUG: "False"
+      MONGO_URI: mongodb://root:iotopia@wearables-db:27017/hcgateway?authSource=admin
+    ports:
+      - "6644:6644"
+    networks:
+      - cloudcare-network
+    depends_on:
+      wearables-db:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./wearables/service-account.json:/app/service-account.json:ro
 
 volumes:
   postgres_data:
     driver: local
   redis_data:
+    driver: local
+  wearables_mongo_data:
     driver: local
 
 networks:

@@ -56,6 +56,12 @@ backend/logs/
 backend/.env
 backend/uploads/
 
+# Wearables service
+backend/wearables/.env
+backend/wearables/service-account.json
+backend/wearables/__pycache__/
+backend/wearables/*.pyc
+
 # Frontend specific
 frontend/node_modules/
 frontend/dist/

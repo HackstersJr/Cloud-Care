@@ -10,6 +10,7 @@ A secure, scalable backend for managing healthcare records with ABHA health ID i
 - **ABHA Integration**: Ayushman Bharat Health Account integration for Indian healthcare
 - **Family Linking**: Secure family account connections with permission-based access
 - **QR Code Sharing**: Temporary medical record sharing via secure QR codes
+- **Wearables Integration**: Health data synchronization from fitness trackers and smartwatches
 - **HIPAA Compliance**: Full audit logging and PHI encryption
 - **Multi-role Support**: Patients, doctors, nurses, and administrators
 
@@ -78,8 +79,10 @@ npm start
 
 ### Development with Docker Compose
 
+The application includes integrated wearables services for health data synchronization.
+
 ```bash
-# Start all services (PostgreSQL, Redis, App)
+# Start all services (PostgreSQL, Redis, MongoDB, App, Wearables)
 docker-compose up
 
 # Start in background
@@ -87,7 +90,15 @@ docker-compose up -d
 
 # View logs
 docker-compose logs -f app
+docker-compose logs -f wearables
 ```
+
+#### Services Included:
+- **app**: Main CloudCare backend (Port 3000)
+- **postgres**: PostgreSQL database (Port 5432)
+- **redis**: Redis cache (Port 6379)
+- **wearables-db**: MongoDB for wearables data (Port 27017)
+- **wearables**: Health data gateway service (Port 6644)
 
 ### Production Docker Build
 
@@ -178,6 +189,12 @@ CloudCare/
 - `POST /api/v1/qr/generate` - Generate QR access token
 - `GET /api/v1/qr/access/:token` - Access record via QR
 
+### Wearables Integration
+- `GET /api/v1/wearables/health` - Health service status
+- `POST /api/v1/wearables/login` - Authenticate with wearables service
+- `POST /api/v1/wearables/sync/:method` - Upload health data
+- `POST /api/v1/wearables/fetch/:method` - Retrieve health data
+
 ### Health Checks
 - `GET /health` - Basic health check
 - `GET /health/detailed` - Detailed system status
@@ -220,6 +237,10 @@ ABHA_CLIENT_SECRET=your_abha_secret
 # Blockchain
 BLOCKCHAIN_RPC_URL=https://your-rpc-url
 PRIVATE_KEY=your_ethereum_private_key
+
+# Wearables Service
+WEARABLES_SERVICE_URL=http://wearables:6644
+WEARABLES_SERVICE_ENABLED=true
 ```
 
 ### Optional Variables
