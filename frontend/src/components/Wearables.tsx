@@ -2,14 +2,14 @@ import { useState, useEffect } from 'react';
 import Layout from './layout/Layout';
 import { 
   Activity, Heart, Footprints, Plus, Wifi, Battery, 
-  TrendingUp, Moon, Zap, BarChart3, Eye
+  TrendingUp, Moon, Zap, BarChart3, Eye, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { 
   LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from 'recharts';
 import { healthApi } from '../services/healthApi';
-import { processHealthData, ProcessedHealthData, getWeekAgoDateString, formatHealthValue } from '../utils/healthDataProcessor';
+import { processHealthData, ProcessedHealthData, formatHealthValue } from '../utils/healthDataProcessor';
 
 const Wearables = () => {
   const [showConnectModal, setShowConnectModal] = useState(false);
@@ -19,6 +19,7 @@ const Wearables = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dataTypes, setDataTypes] = useState<{[key: string]: number}>({});
+  const [weekOffset, setWeekOffset] = useState(0); // 0 = current week, -1 = previous week
 
   // Load health data
   useEffect(() => {
@@ -31,15 +32,21 @@ const Wearables = () => {
         const availableData = await healthApi.getAllAvailableData();
         setDataTypes(availableData);
 
-        // Fetch data for the last week
-        const startDate = getWeekAgoDateString();
+        // Fetch data for the selected week
+        const today = new Date();
+        const end = new Date(today);
+        end.setDate(today.getDate() + weekOffset * 7);
+        const start = new Date(end);
+        start.setDate(end.getDate() - 6);
+        const startDate = start.toISOString().slice(0,10);
+        const endDate = end.toISOString().slice(0,10);
 
         const [steps, heartRate, calories, sleep, distance] = await Promise.all([
-          healthApi.getStepsData(startDate),
-          healthApi.getHeartRateData(startDate),
-          healthApi.getCaloriesData(startDate),
-          healthApi.getSleepData(startDate),
-          healthApi.getDistanceData(startDate)
+          healthApi.getStepsData(startDate, endDate),
+          healthApi.getHeartRateData(startDate, endDate),
+          healthApi.getCaloriesData(startDate, endDate),
+          healthApi.getSleepData(startDate, endDate),
+          healthApi.getDistanceData(startDate, endDate)
         ]);
 
         const processed = processHealthData({
@@ -48,7 +55,7 @@ const Wearables = () => {
           calories,
           sleep,
           distance
-        });
+        }, end);
 
         setHealthData(processed);
       } catch (err) {
@@ -60,7 +67,7 @@ const Wearables = () => {
     };
 
     loadHealthData();
-  }, []);
+  }, [weekOffset]);
 
   const connectedDevices = [
     {
@@ -194,6 +201,25 @@ const Wearables = () => {
               Weekly Trends
             </button>
           </div>
+          {/* Week navigation */}
+          {viewMode === 'weekly' && (
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setWeekOffset((w) => w - 1)}
+                className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200"
+                aria-label="Previous week"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setWeekOffset((w) => Math.min(0, w + 1))}
+                className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200"
+                aria-label="Next week"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
 
         {viewMode === 'today' ? (
@@ -316,6 +342,8 @@ const Wearables = () => {
                         </LineChart>
                       </ResponsiveContainer>
                     </div>
+
+                    {/* Removed 'More data available' section per request */}
                   </div>
                 )}
               </div>

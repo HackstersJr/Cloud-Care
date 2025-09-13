@@ -1,4 +1,4 @@
-import { format, subDays, isToday, parseISO } from 'date-fns';
+import { format, subDays, parseISO, isSameDay } from 'date-fns';
 import { HealthDataPoint } from '../services/healthApi';
 
 export interface ProcessedHealthData {
@@ -35,14 +35,15 @@ export const processHealthData = (rawData: {
   calories: HealthDataPoint[];
   sleep: HealthDataPoint[];
   distance: HealthDataPoint[];
-}): ProcessedHealthData => {
-  const today = new Date();
-  const last7Days = Array.from({ length: 7 }, (_, i) => subDays(today, i)).reverse();
+}, referenceEndDate?: Date): ProcessedHealthData => {
+  const endDay = referenceEndDate ?? new Date();
+  // inclusive range: last 7 days ending at endDay
+  const last7Days = Array.from({ length: 7 }, (_, i) => subDays(endDay, 6 - i));
 
   // Process Steps Data
   const processSteps = () => {
     const todaySteps = rawData.steps
-      .filter(item => isToday(parseISO(item.start)))
+      .filter(item => isSameDay(parseISO(item.start), endDay))
       .reduce((sum, item) => sum + (item.data.count || 0), 0);
 
     const weeklySteps = last7Days.map(date => {
@@ -68,14 +69,14 @@ export const processHealthData = (rawData: {
 
   // Process Heart Rate Data
   const processHeartRate = () => {
-    const todayHR = rawData.heartRate.filter(item => isToday(parseISO(item.start)));
+  const todayHR = rawData.heartRate.filter(item => isSameDay(parseISO(item.start), endDay));
     const current = todayHR.length > 0 ? todayHR[todayHR.length - 1].data.beatsPerMinute || 0 : 0;
     
     const allHR = rawData.heartRate.map(item => item.data.beatsPerMinute || 0);
     const average = allHR.length > 0 ? Math.round(allHR.reduce((sum, hr) => sum + hr, 0) / allHR.length) : 0;
 
     const trend = rawData.heartRate
-      .filter(item => isToday(parseISO(item.start)))
+      .filter(item => isSameDay(parseISO(item.start), endDay))
       .slice(-24) // Last 24 readings
       .map(item => ({
         time: format(parseISO(item.start), 'HH:mm'),
@@ -88,7 +89,7 @@ export const processHealthData = (rawData: {
   // Process Calories Data
   const processCalories = () => {
     const todayCalories = rawData.calories
-      .filter(item => isToday(parseISO(item.start)))
+      .filter(item => isSameDay(parseISO(item.start), endDay))
       .reduce((sum, item) => sum + (item.data.energy?.inKilocalories || 0), 0);
 
     const weeklyCalories = last7Days.map(date => {
@@ -148,7 +149,7 @@ export const processHealthData = (rawData: {
   // Process Distance Data
   const processDistance = () => {
     const todayDistance = rawData.distance
-      .filter(item => isToday(parseISO(item.start)))
+      .filter(item => isSameDay(parseISO(item.start), endDay))
       .reduce((sum, item) => sum + (item.data.length?.inKilometers || 0), 0);
 
     const weeklyDistance = last7Days.map(date => {
